@@ -5,13 +5,15 @@ export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [stats, setStats] = useState({ productsSold: 0 });
 
   const loadDashboard = useCallback(() => {
-    Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
-      .then(([p, o, profile]) => {
+    Promise.all([api.myProducts(), api.myOrders(), api.myProfile(), api.sellerStats()])
+      .then(([p, o, profile, dashboardStats]) => {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
+        setStats({ productsSold: Number(dashboardStats?.productsSold || 0) });
       })
       .catch(console.error);
   }, []);
@@ -26,11 +28,7 @@ export default function DashboardPage({ isActive = true }) {
   const sellerRating = reviewCount
     ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
     : null;
-
-  const productsSold = orders
-    .filter((o) => o.status === "Delivered")
-    .reduce((sum, o) => sum + ((o.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0)), 0);
-
+  const productsSold = Number(stats.productsSold || 0);
   const recentOrders = orders.slice(0, 5);
 
   return (

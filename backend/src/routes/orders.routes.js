@@ -274,6 +274,26 @@ router.patch("/buyer/:id/cancel", auth("buyer"), async (req, res) => {
   }
 });
 
+router.get("/seller/stats", auth("seller"), async (req, res) => {
+  try {
+    const deliveredOrders = await Order.find({ sellerId: req.user.id, status: "Delivered" })
+      .select("products")
+      .lean();
+
+    const productsSold = deliveredOrders.reduce(
+      (sum, order) => sum + (order.products || []).reduce(
+        (itemSum, item) => itemSum + Number(item.quantity || 0),
+        0
+      ),
+      0
+    );
+
+    return res.json({ productsSold });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch seller stats", error: err.message });
+  }
+});
+
 router.get("/seller/me", auth("seller"), async (req, res) => {
   try {
     const orders = await Order.find({ sellerId: req.user.id }).sort({ createdAt: -1 }).lean();
