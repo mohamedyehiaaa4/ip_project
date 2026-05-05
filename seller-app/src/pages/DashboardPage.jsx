@@ -27,7 +27,9 @@ export default function DashboardPage({ isActive = true }) {
     ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
     : null;
 
-  const productsSold = products.reduce((sum, p) => sum + Number(p.orders || 0), 0);
+  const productsSold = orders
+    .filter((o) => o.status === "Delivered")
+    .reduce((sum, o) => sum + ((o.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0)), 0);
 
   const recentOrders = orders.slice(0, 5);
 
