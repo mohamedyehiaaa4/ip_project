@@ -1,12 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
-function countDeliveredItems(orders) {
-  return (orders || [])
-    .filter((order) => order.status === "Delivered")
-    .reduce((sum, order) => sum + ((order.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0)), 0);
-}
-
 export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -45,7 +39,6 @@ export default function DashboardPage({ isActive = true }) {
   const sellerRating = reviewCount
     ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
     : null;
-  const productsSold = Number(stats.productsSold || 0);
   const recentOrders = orders.slice(0, 5);
 
   return (
@@ -72,11 +65,6 @@ export default function DashboardPage({ isActive = true }) {
           <div className="metric-label">Seller Rating</div>
           <div className="metric-value">{sellerRating ? `${sellerRating.toFixed(1)} ★` : "Not rated"}</div>
           <div className="metric-subtitle">{reviewCount} customer review{reviewCount === 1 ? "" : "s"}</div>
-        </div>
-        <div className="metric-card">
-          <div className="metric-label">Products Sold</div>
-          <div className="metric-value">{productsSold}</div>
-          <div className="metric-subtitle">Delivered orders only</div>
         </div>
       </div>
 
