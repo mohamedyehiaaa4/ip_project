@@ -40,6 +40,10 @@ export default function DashboardPage({ isActive = true }) {
     return () => clearInterval(refreshTimer);
   }, [isActive, loadDashboard]);
 
+  useEffect(() => {
+    if (isActive) loadDashboard();
+  }, [isActive, loadDashboard]);
+
   // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
   const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
   const reviewCount = Number(ratingSummary.reviewCount || 0);
