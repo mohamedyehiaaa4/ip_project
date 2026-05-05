@@ -61,6 +61,27 @@ async function rollbackOrderStock(order) {
   }
 }
 
+async function refreshSellerRatingSummary(sellerId) {
+  const stats = await BuyerSellerRating.aggregate([
+    { $match: { sellerId: new mongoose.Types.ObjectId(sellerId) } },
+    {
+      $group: {
+        _id: "$sellerId",
+        averageRating: { $avg: "$rating" },
+        reviewCount: { $sum: 1 }
+      }
+    }
+  ]);
+
+  const summary = {
+    sellerRating: Number(stats[0]?.averageRating || 0),
+    sellerReviewCount: Number(stats[0]?.reviewCount || 0)
+  };
+
+  await User.findByIdAndUpdate(sellerId, { $set: summary });
+  return summary;
+}
+
 async function recomputeSellerDeliveredProductSales(sellerId) {
   const [sellerProducts, deliveredOrders] = await Promise.all([
     Product.find({ sellerId }).select("_id").lean(),
@@ -294,9 +315,18 @@ router.get("/seller/rating", auth("seller"), async (req, res) => {
       }
     ]);
 
+    if (stats.length) {
+      const summary = await refreshSellerRatingSummary(req.user.id);
+      return res.json({
+        rating: summary.sellerRating,
+        reviewCount: summary.sellerReviewCount
+      });
+    }
+
+    const seller = await User.findById(req.user.id).select("sellerRating sellerReviewCount").lean();
     return res.json({
-      rating: Number(stats[0]?.averageRating || 0),
-      reviewCount: Number(stats[0]?.reviewCount || 0)
+      rating: Number(seller?.sellerRating || 0),
+      reviewCount: Number(seller?.sellerReviewCount || 0)
     });
   } catch (err) {
     return res.status(500).json({ message: "Failed to fetch seller rating", error: err.message });
@@ -463,6 +493,8 @@ router.post("/buyer/ratings/seller", auth("buyer"), async (req, res) => {
       { rating: Number(rating), comment: String(comment || "").trim() },
       { new: true, upsert: true }
     );
+
+    await refreshSellerRatingSummary(sellerId);
 
     return res.status(201).json(doc);
   } catch (err) {

@@ -94,7 +94,7 @@ async function buildBuyerCartPayload(userId) {
 
 router.get("/seller/me/profile", auth("seller"), async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance");
+    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance sellerRating sellerReviewCount");
     if (!user) return res.status(404).json({ message: "Seller not found" });
     return res.json(user);
   } catch (err) {

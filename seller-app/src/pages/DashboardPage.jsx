@@ -26,6 +26,10 @@ export default function DashboardPage({ isActive = true }) {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
+        setRatingSummary({
+          rating: Number(profile.sellerRating || 0),
+          reviewCount: Number(profile.sellerReviewCount || 0)
+        });
         loadSellerRating();
       })
       .catch(console.error);
@@ -38,10 +42,6 @@ export default function DashboardPage({ isActive = true }) {
     const refreshTimer = setInterval(loadDashboard, 5000);
 
     return () => clearInterval(refreshTimer);
-  }, [isActive, loadDashboard]);
-
-  useEffect(() => {
-    if (isActive) loadDashboard();
   }, [isActive, loadDashboard]);
 
   // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
