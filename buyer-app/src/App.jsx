@@ -34,6 +34,11 @@ function formatDate(input) {
   return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
+function formatAddress(address) {
+  if (!address) return "";
+  return [address.line1, address.city, address.country, address.postalCode].filter(Boolean).join(", ");
+}
+
 function addDays(input, days) {
   const dt = new Date(input);
   if (Number.isNaN(dt.getTime())) return null;
@@ -229,6 +234,7 @@ function BuyerAppShell() {
   const [cart, setCart] = useState({ items: [], subtotal: 0, itemCount: 0 });
   const [wishlist, setWishlist] = useState([]);
   const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "", phone: "", addresses: [] });
+  const [selectedAddressId, setSelectedAddressId] = useState("");
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", country: "", postalCode: "", isDefault: false });
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -273,13 +279,18 @@ function BuyerAppShell() {
       setCart(cartData || { items: [], subtotal: 0, itemCount: 0 });
       setWishlist(Array.isArray(wishlistData) ? wishlistData : []);
       setMyFlags(Array.isArray(flagsData) ? flagsData : []);
+      const addresses = Array.isArray(profileData?.addresses) ? profileData.addresses : [];
       setProfile((prev) => ({
         ...prev,
         name: profileData?.name || prev.name,
         email: profileData?.email || prev.email,
         phone: profileData?.phone || "",
-        addresses: Array.isArray(profileData?.addresses) ? profileData.addresses : []
+        addresses
       }));
+      setSelectedAddressId((current) => {
+        if (addresses.some((address) => String(address._id) === String(current))) return current;
+        return String((addresses.find((address) => address.isDefault) || addresses[0])?._id || "");
+      });
     } catch (err) {
       pushToast(err.message || "Failed to load buyer data", "error");
     }
@@ -355,6 +366,9 @@ function BuyerAppShell() {
 
     return Array.from(map.values());
   }, [selectedReportOrder]);
+
+  const savedAddresses = Array.isArray(profile.addresses) ? profile.addresses : [];
+  const selectedAddress = savedAddresses.find((address) => String(address._id) === String(selectedAddressId)) || null;
 
   const applyOptimisticCartAdd = useCallback((product, quantity = 1) => {
     setCart((prev) => {
@@ -584,6 +598,15 @@ function BuyerAppShell() {
         pushToast("Your cart is empty", "info");
         return;
       }
+      if (!savedAddresses.length) {
+        pushToast("Add at least one delivery address before checkout", "info");
+        setScreen("profile");
+        return;
+      }
+      if (!selectedAddressId) {
+        pushToast("Choose a delivery address for this order", "info");
+        return;
+      }
       if (paymentMethod === "Credit Card") {
         const { cardNumber, cardHolder, cardExpiry, cardCVV } = cardDetails;
         if (!cardNumber || !cardHolder || !cardExpiry || !cardCVV) {
@@ -591,7 +614,7 @@ function BuyerAppShell() {
           return;
         }
       }
-      const payload = { paymentMethod };
+      const payload = { paymentMethod, deliveryAddressId: selectedAddressId };
       if (paymentMethod === "Credit Card") payload.cardDetails = cardDetails;
       await api.checkoutCart(payload);
       await refreshAll();
@@ -666,7 +689,9 @@ function BuyerAppShell() {
   async function addAddress() {
     try {
       const addresses = await api.addAddress(newAddress);
-      setProfile((prev) => ({ ...prev, addresses: Array.isArray(addresses) ? addresses : prev.addresses }));
+      const nextAddresses = Array.isArray(addresses) ? addresses : profile.addresses;
+      setProfile((prev) => ({ ...prev, addresses: nextAddresses }));
+      setSelectedAddressId(String((nextAddresses.find((address) => address.isDefault) || nextAddresses.at(-1) || nextAddresses[0])?._id || ""));
       setNewAddress({ label: "Home", line1: "", city: "", country: "", postalCode: "", isDefault: false });
       pushToast("Address added", "success");
     } catch (err) {
@@ -677,7 +702,12 @@ function BuyerAppShell() {
   async function deleteAddress(addressId) {
     try {
       const addresses = await api.deleteAddress(addressId);
-      setProfile((prev) => ({ ...prev, addresses: Array.isArray(addresses) ? addresses : prev.addresses }));
+      const nextAddresses = Array.isArray(addresses) ? addresses : profile.addresses;
+      setProfile((prev) => ({ ...prev, addresses: nextAddresses }));
+      setSelectedAddressId((current) => {
+        if (nextAddresses.some((address) => String(address._id) === String(current))) return current;
+        return String((nextAddresses.find((address) => address.isDefault) || nextAddresses[0])?._id || "");
+      });
       pushToast("Address deleted", "info");
     } catch (err) {
       pushToast(err.message || "Failed to delete address", "error");
@@ -966,6 +996,42 @@ function BuyerAppShell() {
 
             <div className="product-details" style={{ marginTop: 16 }}>
               <h2 style={{ marginBottom: 10 }}>Payment and Checkout</h2>
+              <div className="checkout-section">
+                <div className="checkout-section__header">
+                  <div>
+                    <h3>Deliver to</h3>
+                    <p>Choose one of your saved locations for this order.</p>
+                  </div>
+                  <button type="button" className="btn btn-secondary" onClick={() => setScreen("profile")}>Manage addresses</button>
+                </div>
+                {savedAddresses.length ? (
+                  <div className="checkout-address-grid">
+                    {savedAddresses.map((address) => (
+                      <label key={address._id} className={`checkout-address-card ${String(selectedAddressId) === String(address._id) ? "selected" : ""}`}>
+                        <input
+                          type="radio"
+                          name="delivery-address"
+                          value={address._id}
+                          checked={String(selectedAddressId) === String(address._id)}
+                          onChange={() => setSelectedAddressId(String(address._id))}
+                        />
+                        <span>
+                          <strong>{address.label || "Address"}</strong>
+                          {address.isDefault ? <em>Default</em> : null}
+                          <small>{formatAddress(address)}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="checkout-empty-address">
+                    <strong>No saved delivery addresses yet.</strong>
+                    <p>Add at least one address in Profile before completing checkout.</p>
+                    <button type="button" className="btn order-btn" onClick={() => setScreen("profile")}>Add address</button>
+                  </div>
+                )}
+              </div>
+
               <select className="search-bar" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); setCardDetails({ cardNumber: "", cardHolder: "", cardExpiry: "", cardCVV: "" }); }}>
                 <option>Cash on Delivery</option>
                 <option>Credit Card</option>
@@ -1062,6 +1128,9 @@ function BuyerAppShell() {
                       <span className="order-card__price">{money(order.totalPrice)}</span>
                       <span className="order-card__delivery">📅 {formatDate(resolveExpectedDeliveryDate(order))}</span>
                     </div>
+                    {order.deliveryAddress ? (
+                      <div className="order-card__address">📍 {order.deliveryAddress.label || "Delivery"}: {formatAddress(order.deliveryAddress)}</div>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1210,7 +1279,7 @@ function BuyerAppShell() {
             <div className="product-details" style={{ marginTop: 16 }}>
               <h2 style={{ marginBottom: 12 }}>Addresses</h2>
               {profile.addresses?.length ? profile.addresses.map((address) => (
-                <div key={address._id} className="address-card">
+                <div key={address._id} className={`address-card ${String(selectedAddressId) === String(address._id) ? "selected" : ""}`}>
                   <div>
                     <strong>{address.label || "Address"}</strong>
                     <p>{address.line1}, {address.city}, {address.country}</p>
@@ -1219,7 +1288,7 @@ function BuyerAppShell() {
                   </div>
                   <button type="button" className="btn" style={{ background: "#fee2e2", marginTop: 0, width: "auto" }} onClick={() => deleteAddress(address._id)}>Delete</button>
                 </div>
-              )) : <p style={{ color: "var(--text-muted)" }}>No addresses yet.</p>}
+              )) : <div className="empty-address-state">Add your first saved location so checkout can ask where to deliver each order.</div>}
 
               <div className="form-group" style={{ marginTop: 16 }}>
                 <label className="form-label">Add New Address</label>

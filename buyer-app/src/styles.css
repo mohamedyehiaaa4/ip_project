@@ -1397,3 +1397,109 @@ body {
     font-size: 11px;
   }
 }
+
+.checkout-section {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(239, 246, 255, 0.95), rgba(255, 255, 255, 0.9));
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.08);
+}
+
+.checkout-section__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.checkout-section__header h3 {
+  margin: 0 0 4px;
+  color: var(--text);
+  font-size: 17px;
+}
+
+.checkout-section__header p,
+.checkout-empty-address p {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.btn-secondary {
+  background: #e0f2fe;
+  color: #0369a1;
+  width: auto;
+  margin-top: 0;
+}
+
+.checkout-address-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.checkout-address-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.checkout-address-card:hover,
+.checkout-address-card.selected,
+.address-card.selected {
+  border-color: var(--accent);
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.14);
+  transform: translateY(-1px);
+}
+
+.checkout-address-card input {
+  margin-top: 4px;
+  accent-color: var(--accent);
+}
+
+.checkout-address-card span {
+  display: grid;
+  gap: 4px;
+}
+
+.checkout-address-card em {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #15803d;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.checkout-address-card small,
+.order-card__address {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.checkout-empty-address,
+.empty-address-state {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px dashed rgba(37, 99, 235, 0.35);
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--text-muted);
+}
+
+.order-card__address {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
