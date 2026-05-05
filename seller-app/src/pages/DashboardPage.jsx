@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
+function countDeliveredItems(orders) {
+  return (orders || [])
+    .filter((order) => order.status === "Delivered")
+    .reduce((sum, order) => sum + ((order.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0)), 0);
+}
+
 export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -8,12 +14,23 @@ export default function DashboardPage({ isActive = true }) {
   const [stats, setStats] = useState({ productsSold: 0 });
 
   const loadDashboard = useCallback(() => {
-    Promise.all([api.myProducts(), api.myOrders(), api.myProfile(), api.sellerStats()])
-      .then(([p, o, profile, dashboardStats]) => {
+    Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
+      .then(([p, o, profile]) => {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
-        setStats({ productsSold: Number(dashboardStats?.productsSold || 0) });
+        setStats({ productsSold: countDeliveredItems(o) });
+
+        api.sellerStats()
+          .then((dashboardStats) => {
+            const backendProductsSold = Number(dashboardStats?.productsSold);
+            if (Number.isFinite(backendProductsSold)) {
+              setStats({ productsSold: backendProductsSold });
+            }
+          })
+          .catch((err) => {
+            console.warn("Failed to load seller stats; using delivered orders fallback", err);
+          });
       })
       .catch(console.error);
   }, []);
