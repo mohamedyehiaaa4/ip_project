@@ -4,8 +4,23 @@ import { api, getUser, logout, saveAuth } from "./api";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 const API_ORIGIN = API_URL.replace(/\/api\/?$/, "");
+const DEFAULT_PRODUCT_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="55%" stop-color="#eff6ff"/>
+      <stop offset="100%" stop-color="#bfdbfe"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="36" fill="url(#bg)"/>
+  <circle cx="184" cy="56" r="22" fill="#93c5fd" opacity="0.7"/>
+  <path d="M56 178h128a16 16 0 0 0 16-16V90a16 16 0 0 0-16-16H56a16 16 0 0 0-16 16v72a16 16 0 0 0 16 16Z" fill="#ffffff" opacity="0.92"/>
+  <path d="M65 154l34-38 25 28 20-22 33 32H65Z" fill="#60a5fa"/>
+  <rect x="72" y="52" width="96" height="28" rx="14" fill="#2563eb" opacity="0.85"/>
+  <text x="120" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#1e3a8a">Product Image</text>
+</svg>`)}`;
 
-const STATUS_SEQUENCE = ["Placed", "Processing", "Preparing", "Shipping", "Delivered"];
 const LATE_DELIVERY_GRACE_DAYS = 3;
 
 function money(value) {
@@ -22,7 +37,7 @@ function stars(rating) {
 }
 
 function resolveImageUrl(path) {
-  if (!path) return "";
+  if (!path) return DEFAULT_PRODUCT_IMAGE;
   if (/^https?:\/\//i.test(path)) return path;
   if (String(path).startsWith("/uploads/")) return `${API_ORIGIN}${path}`;
   return String(path);
@@ -73,33 +88,6 @@ function getDiscountedPrice(price, discountPercentage) {
   const basePrice = Math.max(0, Number(price || 0));
   const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
   return basePrice * (1 - discount / 100);
-}
-
-function getTrackingTimeline(order) {
-  const createdAt = order?.createdAt || new Date().toISOString();
-  const currentIndex = STATUS_SEQUENCE.indexOf(order?.status);
-  const expectedDate = resolveExpectedDeliveryDate(order);
-  const createdDate = new Date(createdAt);
-  const totalDays = Math.max(1, Number(order?.expectedDeliveryDays || 3));
-  const checkpoints = {
-    Placed: 0,
-    Processing: Math.max(1, Math.round(totalDays * 0.25)),
-    Preparing: Math.max(1, Math.round(totalDays * 0.5)),
-    Shipping: Math.max(1, Math.round(totalDays * 0.8)),
-    Delivered: totalDays
-  };
-
-  return STATUS_SEQUENCE.map((status, index) => {
-    const estimate = status === "Delivered"
-      ? expectedDate
-      : addDays(createdDate, checkpoints[status] || 0);
-    return {
-      status,
-      isActive: currentIndex >= index,
-      isCurrent: order?.status === status,
-      dateLabel: estimate ? formatDate(estimate) : "Unknown"
-    };
-  });
 }
 
 function AuthScreen({ onAuthed }) {
@@ -197,7 +185,7 @@ const ProductCard = memo(function ProductCard({ product, inWishlist, onAddToCart
       }
     }}>
       <div className="product-badge">{product.category || "General"}</div>
-      <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" />
+      <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
       <div className="product-title">{product.name}</div>
       <div className="product-rating">
         <span className="stars">{stars(product.ratings)}</span>
@@ -250,7 +238,6 @@ function BuyerAppShell() {
   const [ratingForms, setRatingForms] = useState({});
   const [toasts, setToasts] = useState([]);
   const [visibleCount, setVisibleCount] = useState(12);
-  const [trackingOrderId, setTrackingOrderId] = useState("");
   const [productDetail, setProductDetail] = useState(null);
   const [productReview, setProductReview] = useState({ rating: 5, text: "" });
   const [aiSummary, setAiSummary] = useState({ text: "", loading: false, error: "" });
@@ -340,7 +327,6 @@ function BuyerAppShell() {
   }, [orders, orderFilter]);
 
   const selectedReportOrder = orders.find((order) => String(order._id) === String(reportForm.orderId));
-  const trackingOrder = orders.find((order) => String(order._id) === String(trackingOrderId)) || null;
 
   const reportSellerOptions = useMemo(() => {
     if (!selectedReportOrder) return [];
@@ -840,7 +826,7 @@ function BuyerAppShell() {
             ) : (
               <>
                 <div className="detail-grid">
-                  <img className="detail-image" src={resolveImageUrl(productDetail.product?.imageUrl)} alt={productDetail.product?.name || "Product"} />
+                  <img className="detail-image" src={resolveImageUrl(productDetail.product?.imageUrl)} alt={productDetail.product?.name || "Product"} onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                   <div>
                     <div className="product-badge">{productDetail.product?.category || "General"}</div>
                     <h2 className="detail-title">{productDetail.product?.name}</h2>
@@ -973,7 +959,7 @@ function BuyerAppShell() {
             {cart.items.length ? cart.items.map((item) => (
               <article key={String(item.productId)} className="order-card">
                 <h2 className="order-card__title">{item.productName}</h2>
-                <img className="mini-product-img" src={resolveImageUrl(item.imageUrl)} alt={item.productName} loading="lazy" decoding="async" />
+                <img className="mini-product-img" src={resolveImageUrl(item.imageUrl)} alt={item.productName} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                 <p style={{ color: "var(--text-muted)" }}>Seller: {item.sellerId}</p>
                 <p style={{ marginTop: 6, marginBottom: 10 }}>
                   {Number(item.discountPercentage || 0) > 0 ? (
@@ -1111,6 +1097,7 @@ function BuyerAppShell() {
                       className="order-card__image" 
                       src={resolveImageUrl(order.itemsDetailed?.[0]?.imageUrl || "")} 
                       alt={order.productName || "Product"}
+                      onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }}
                     />
                   </div>
                   <div className="order-card__content">
@@ -1134,29 +1121,8 @@ function BuyerAppShell() {
                   </div>
                 </div>
 
-                <div className="order-card__tracking">
-                  <div className={`order-card__tracking-step ${["Placed", "Processing", "Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Placed</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${["Processing", "Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Processing</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${["Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Preparing</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${order.status === "Delivered" ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Delivered</div>
-                  </div>
-                </div>
 
                 <div className="order-card__actions">
-                  <button type="button" className="order-card__action-btn order-card__action-btn--primary" onClick={() => { setTrackingOrderId(order._id); setScreen("tracking"); }}>
-                    Track
-                  </button>
                   <button type="button" className="order-card__action-btn order-card__action-btn--secondary" onClick={() => { setReportForm({ ...reportForm, orderId: order._id, sellerId: order.sellerId }); setScreen("report"); }}>
                     Report
                   </button>
@@ -1196,42 +1162,6 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "tracking" ? "active" : ""}`} id="tracking">
-        {screen === "tracking" ? (
-          <div>
-            <h1 className="header">Tracking</h1>
-            {!trackingOrder ? (
-              <div className="product-details">Select an order from Orders to view full tracking timeline.</div>
-            ) : (
-              <div className="product-details">
-                <h2 style={{ marginBottom: 6 }}>{trackingOrder.productName || `Order ${String(trackingOrder._id).slice(-6)}`}</h2>
-                <p style={{ color: "var(--text-muted)", marginBottom: 14 }}>Order #{String(trackingOrder._id).slice(-8)}</p>
-
-                <div className="timeline">
-                  {getTrackingTimeline(trackingOrder).map((point) => (
-                    <div key={point.status} className={`timeline-item ${point.isActive ? "active" : ""}`}>
-                      <div className="timeline-dot" />
-                      <div>
-                        <div className="timeline-title">{point.status}{point.isCurrent ? " (Current)" : ""}</div>
-                        <div className="timeline-date">Estimated: {point.dateLabel}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <p style={{ marginTop: 10, color: "var(--text-muted)" }}>
-                  Expected by: <strong>{formatDate(resolveExpectedDeliveryDate(trackingOrder))}</strong>
-                  {` (late flag allowed after +${LATE_DELIVERY_GRACE_DAYS} days)`}
-                </p>
-
-                {trackingOrder.status === "Cancelled" ? (
-                  <p style={{ marginTop: 12, color: "#b91c1c", fontWeight: 700 }}>This order has been cancelled.</p>
-                ) : null}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
 
       <div className={`screen ${screen === "wishlist" ? "active" : ""}`} id="wishlist">
         {screen === "wishlist" ? (
@@ -1242,7 +1172,7 @@ function BuyerAppShell() {
                 {wishlist.map((product) => (
                   <article key={product._id} className="product-card">
                     <div className="product-badge">{product.category || "General"}</div>
-                    <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" />
+                    <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                     <div className="product-title">{product.name}</div>
                     <div className="product-price">{money(product.price)}</div>
                     <button type="button" className="btn order-btn" onClick={() => onAddToCart(product)}>Add to Cart</button>
@@ -1488,7 +1418,6 @@ function BuyerAppShell() {
         <a href="#" className={`nav__item ${screen === "home" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("home"); }}>Home</a>
         <a href="#" className={`nav__item ${screen === "cart" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("cart"); }}>Cart</a>
         <a href="#" className={`nav__item ${screen === "orders" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("orders"); }}>Orders</a>
-        <a href="#" className={`nav__item ${screen === "tracking" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("tracking"); }}>Tracking</a>
         <a href="#" className={`nav__item ${screen === "wishlist" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("wishlist"); }}>Wishlist</a>
         <a href="#" className={`nav__item ${screen === "profile" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("profile"); }}>Profile</a>
         <a href="#" className={`nav__item ${screen === "report" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("report"); }}>Report</a>
