@@ -425,7 +425,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
             isActive: true,
             inventory: { $gte: item.quantity }
           },
-          { $inc: { inventory: -item.quantity, orders: item.quantity } }
+          { $inc: { inventory: -item.quantity } }
         );
 
         if (!stockResult.modifiedCount) {
@@ -434,7 +434,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
               stockUpdates.map((u) => ({
                 updateOne: {
                   filter: { _id: u.productId },
-                  update: { $inc: { inventory: u.quantity, orders: -u.quantity } }
+                  update: { $inc: { inventory: u.quantity } }
                 }
               }))
             );

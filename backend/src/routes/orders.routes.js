@@ -49,8 +49,27 @@ async function rollbackOrderStock(order) {
       },
       update: {
         $inc: {
-          inventory: Number(item.quantity || 0),
-          orders: -Number(item.quantity || 0)
+          inventory: Number(item.quantity || 0)
+        }
+      }
+    }
+  }));
+
+  if (updates.length) {
+    await Product.bulkWrite(updates);
+  }
+}
+
+async function updateDeliveredProductSales(order, direction = 1) {
+  const updates = (order.products || []).map((item) => ({
+    updateOne: {
+      filter: {
+        _id: item.productId,
+        sellerId: order.sellerId
+      },
+      update: {
+        $inc: {
+          orders: Number(item.quantity || 0) * direction
         }
       }
     }
@@ -111,7 +130,7 @@ router.post("/", auth("buyer"), async (req, res) => {
           isActive: true,
           inventory: { $gte: item.quantity }
         },
-        { $inc: { inventory: -item.quantity, orders: item.quantity } }
+        { $inc: { inventory: -item.quantity } }
       );
 
       if (!stockResult.modifiedCount) {
@@ -120,7 +139,7 @@ router.post("/", auth("buyer"), async (req, res) => {
             appliedStockUpdates.map((u) => ({
               updateOne: {
                 filter: { _id: u.productId },
-                update: { $inc: { inventory: u.quantity, orders: -u.quantity } }
+                update: { $inc: { inventory: u.quantity } }
               }
             }))
           );
@@ -284,6 +303,12 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
         buyerName: buyerMap.get(String(order.buyerId)) || "Unknown",
         buyer_name: buyerMap.get(String(order.buyerId)) || "Unknown",
         product: firstItem ? productMap.get(String(firstItem.productId)) || "Unknown product" : "No product",
+        products: (order.products || []).map((item) => ({
+          productId: item.productId,
+          quantity: Number(item.quantity || 0),
+          price: Number(item.price || 0),
+          productName: productMap.get(String(item.productId)) || "Unknown product"
+        })),
         status: order.status,
         totalPrice: order.totalPrice,
         total_amount: order.totalPrice,
@@ -319,6 +344,12 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
 
     if (status === "Cancelled" && order.status !== "Cancelled") {
       await rollbackOrderStock(order);
+    }
+
+    if (status === "Delivered" && order.status !== "Delivered") {
+      await updateDeliveredProductSales(order, 1);
+    } else if (status !== "Delivered" && order.status === "Delivered") {
+      await updateDeliveredProductSales(order, -1);
     }
 
     // Credit seller balance when COD order is delivered
