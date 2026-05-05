@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
@@ -18,6 +19,12 @@ function addDays(baseDate, days) {
 function normalizePaymentMethod(value) {
   const candidate = String(value || "").trim();
   return PAYMENT_METHODS.includes(candidate) ? candidate : "Cash on Delivery";
+}
+
+function getDiscountedPrice(price, discountPercentage) {
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
+  return basePrice * (1 - discount / 100);
 }
 
 function validateCardDetails(cardDetails) {
@@ -43,10 +50,35 @@ async function rollbackOrderStock(order) {
       },
       update: {
         $inc: {
-          inventory: Number(item.quantity || 0),
-          orders: -Number(item.quantity || 0)
+          inventory: Number(item.quantity || 0)
         }
       }
+    }
+  }));
+
+  if (updates.length) {
+    await Product.bulkWrite(updates);
+  }
+}
+
+async function recomputeSellerDeliveredProductSales(sellerId) {
+  const [sellerProducts, deliveredOrders] = await Promise.all([
+    Product.find({ sellerId }).select("_id").lean(),
+    Order.find({ sellerId, status: "Delivered" }).select("products").lean()
+  ]);
+
+  const soldByProduct = new Map();
+  for (const order of deliveredOrders) {
+    for (const item of order.products || []) {
+      const key = String(item.productId);
+      soldByProduct.set(key, (soldByProduct.get(key) || 0) + Number(item.quantity || 0));
+    }
+  }
+
+  const updates = sellerProducts.map((product) => ({
+    updateOne: {
+      filter: { _id: product._id, sellerId },
+      update: { $set: { orders: soldByProduct.get(String(product._id)) || 0 } }
     }
   }));
 
@@ -86,8 +118,9 @@ router.post("/", auth("buyer"), async (req, res) => {
       }
 
       const quantity = Math.max(1, Number(rawItem.quantity || 1));
-      orderItems.push({ productId: p._id, quantity, price: p.price });
-      totalPrice += p.price * quantity;
+      const unitPrice = getDiscountedPrice(p.price, p.discountPercentage);
+      orderItems.push({ productId: p._id, quantity, price: unitPrice });
+      totalPrice += unitPrice * quantity;
       expectedDeliveryDays = Math.max(expectedDeliveryDays, Number(p.deliveryDays || 1));
     }
 
@@ -104,7 +137,7 @@ router.post("/", auth("buyer"), async (req, res) => {
           isActive: true,
           inventory: { $gte: item.quantity }
         },
-        { $inc: { inventory: -item.quantity, orders: item.quantity } }
+        { $inc: { inventory: -item.quantity } }
       );
 
       if (!stockResult.modifiedCount) {
@@ -113,7 +146,7 @@ router.post("/", auth("buyer"), async (req, res) => {
             appliedStockUpdates.map((u) => ({
               updateOne: {
                 filter: { _id: u.productId },
-                update: { $inc: { inventory: u.quantity, orders: -u.quantity } }
+                update: { $inc: { inventory: u.quantity } }
               }
             }))
           );
@@ -248,6 +281,48 @@ router.patch("/buyer/:id/cancel", auth("buyer"), async (req, res) => {
   }
 });
 
+router.get("/seller/rating", auth("seller"), async (req, res) => {
+  try {
+    const stats = await BuyerSellerRating.aggregate([
+      { $match: { sellerId: new mongoose.Types.ObjectId(req.user.id) } },
+      {
+        $group: {
+          _id: "$sellerId",
+          averageRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    return res.json({
+      rating: Number(stats[0]?.averageRating || 0),
+      reviewCount: Number(stats[0]?.reviewCount || 0)
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch seller rating", error: err.message });
+  }
+});
+
+router.get("/seller/stats", auth("seller"), async (req, res) => {
+  try {
+    const deliveredOrders = await Order.find({ sellerId: req.user.id, status: "Delivered" })
+      .select("products")
+      .lean();
+
+    const productsSold = deliveredOrders.reduce(
+      (sum, order) => sum + (order.products || []).reduce(
+        (itemSum, item) => itemSum + Number(item.quantity || 0),
+        0
+      ),
+      0
+    );
+
+    return res.json({ productsSold });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch seller stats", error: err.message });
+  }
+});
+
 router.get("/seller/me", auth("seller"), async (req, res) => {
   try {
     const orders = await Order.find({ sellerId: req.user.id }).sort({ createdAt: -1 }).lean();
@@ -277,6 +352,12 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
         buyerName: buyerMap.get(String(order.buyerId)) || "Unknown",
         buyer_name: buyerMap.get(String(order.buyerId)) || "Unknown",
         product: firstItem ? productMap.get(String(firstItem.productId)) || "Unknown product" : "No product",
+        products: (order.products || []).map((item) => ({
+          productId: item.productId,
+          quantity: Number(item.quantity || 0),
+          price: Number(item.price || 0),
+          productName: productMap.get(String(item.productId)) || "Unknown product"
+        })),
         status: order.status,
         totalPrice: order.totalPrice,
         total_amount: order.totalPrice,
@@ -310,14 +391,16 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
       return res.status(400).json({ message: "Cancelled orders cannot be reopened" });
     }
 
-    if (status === "Cancelled" && order.status !== "Cancelled") {
+    const previousStatus = order.status;
+
+    if (status === "Cancelled" && previousStatus !== "Cancelled") {
       await rollbackOrderStock(order);
     }
 
     // Credit seller balance when COD order is delivered
     if (
       status === "Delivered" &&
-      order.status !== "Delivered" &&
+      previousStatus !== "Delivered" &&
       order.paymentMethod === "Cash on Delivery"
     ) {
       await User.findByIdAndUpdate(order.sellerId, { $inc: { balance: order.totalPrice } });
@@ -326,6 +409,11 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
 
     order.status = status;
     await order.save();
+
+    if (status === "Delivered" || previousStatus === "Delivered") {
+      await recomputeSellerDeliveredProductSales(order.sellerId);
+    }
+
     return res.json(order);
   } catch (err) {
     return res.status(500).json({ message: "Failed to update order", error: err.message });
