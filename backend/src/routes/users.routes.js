@@ -18,6 +18,12 @@ function normalizePaymentMethod(value) {
   return PAYMENT_METHODS.includes(candidate) ? candidate : "Cash on Delivery";
 }
 
+function getDiscountedPrice(price, discountPercentage) {
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
+  return basePrice * (1 - discount / 100);
+}
+
 function validateCardDetails(cardDetails) {
   if (!cardDetails) return "Card details are required for Credit Card payment";
   const { cardNumber, cardHolder, cardExpiry, cardCVV } = cardDetails;
@@ -56,7 +62,9 @@ async function buildBuyerCartPayload(userId) {
       if (!product) return null;
 
       const quantity = Math.max(1, Number(item.quantity || 1));
-      const unitPrice = Number(product.price || 0);
+      const originalPrice = Number(product.price || 0);
+      const discountPercentage = Math.max(0, Math.min(100, Number(product.discountPercentage || 0)));
+      const unitPrice = getDiscountedPrice(originalPrice, discountPercentage);
       const lineTotal = unitPrice * quantity;
 
       return {
@@ -66,6 +74,8 @@ async function buildBuyerCartPayload(userId) {
         imageUrl: product.imageUrl || "",
         sellerId: product.sellerId,
         unitPrice,
+        originalPrice,
+        discountPercentage,
         quantity,
         lineTotal,
         availableInventory: Number(product.inventory || 0),
@@ -84,7 +94,7 @@ async function buildBuyerCartPayload(userId) {
 
 router.get("/seller/me/profile", auth("seller"), async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance");
+    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance sellerRating sellerReviewCount");
     if (!user) return res.status(404).json({ message: "Seller not found" });
     return res.json(user);
   } catch (err) {
@@ -415,7 +425,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
             isActive: true,
             inventory: { $gte: item.quantity }
           },
-          { $inc: { inventory: -item.quantity, orders: item.quantity } }
+          { $inc: { inventory: -item.quantity } }
         );
 
         if (!stockResult.modifiedCount) {
@@ -424,7 +434,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
               stockUpdates.map((u) => ({
                 updateOne: {
                   filter: { _id: u.productId },
-                  update: { $inc: { inventory: u.quantity, orders: -u.quantity } }
+                  update: { $inc: { inventory: u.quantity } }
                 }
               }))
             );
