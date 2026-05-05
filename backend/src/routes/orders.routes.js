@@ -457,6 +457,12 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
       await rollbackOrderStock(order);
     }
 
+    if (status === "Delivered" && order.status !== "Delivered") {
+      await updateDeliveredProductSales(order, 1);
+    } else if (status !== "Delivered" && order.status === "Delivered") {
+      await updateDeliveredProductSales(order, -1);
+    }
+
     // Credit seller balance when COD order is delivered
     if (
       status === "Delivered" &&
