@@ -7,19 +7,38 @@ export default function DashboardPage({ isActive = true }) {
   const [balance, setBalance] = useState(0);
   const [ratingSummary, setRatingSummary] = useState({ rating: 0, reviewCount: 0 });
 
-  const loadDashboard = useCallback(() => {
-    Promise.all([api.myProducts(), api.myOrders(), api.myProfile(), api.sellerRating()])
-      .then(([p, o, profile, ratingData]) => {
-        setProducts(p);
-        setOrders(o);
-        setBalance(Number(profile.balance || 0));
+  const loadSellerRating = useCallback(() => {
+    api.sellerRating()
+      .then((ratingData) => {
         setRatingSummary({
           rating: Number(ratingData?.rating || 0),
           reviewCount: Number(ratingData?.reviewCount || 0)
         });
       })
-      .catch(console.error);
+      .catch((err) => {
+        console.warn("Failed to load seller rating", err);
+      });
   }, []);
+
+  const loadDashboard = useCallback(() => {
+    Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
+      .then(([p, o, profile]) => {
+        setProducts(p);
+        setOrders(o);
+        setBalance(Number(profile.balance || 0));
+        loadSellerRating();
+      })
+      .catch(console.error);
+  }, [loadSellerRating]);
+
+  useEffect(() => {
+    if (!isActive) return undefined;
+
+    loadDashboard();
+    const refreshTimer = setInterval(loadDashboard, 5000);
+
+    return () => clearInterval(refreshTimer);
+  }, [isActive, loadDashboard]);
 
   useEffect(() => {
     if (isActive) loadDashboard();
