@@ -65,9 +65,8 @@ function canFlagLateDelivery(order) {
 }
 
 function getDiscountedPrice(price, discountPercentage) {
-  const basePrice = Number(price || 0);
-  const discount = Number(discountPercentage || 0);
-  if (discount <= 0 || discount >= 100) return basePrice;
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
   return basePrice * (1 - discount / 100);
 }
 
@@ -371,7 +370,9 @@ function BuyerAppShell() {
           lineTotal: Number(current.unitPrice || 0) * nextQty
         };
       } else {
-        const unitPrice = Number(product.price || 0);
+        const originalPrice = Number(product.price || 0);
+        const discountPercentage = Math.max(0, Math.min(100, Number(product.discountPercentage || 0)));
+        const unitPrice = getDiscountedPrice(originalPrice, discountPercentage);
         nextItems.push({
           productId: product._id,
           productName: product.name,
@@ -379,6 +380,8 @@ function BuyerAppShell() {
           imageUrl: product.imageUrl || "",
           sellerId: product.sellerId,
           unitPrice,
+          originalPrice,
+          discountPercentage,
           quantity,
           lineTotal: unitPrice * quantity,
           availableInventory: Number(product.inventory || 0)
@@ -931,7 +934,16 @@ function BuyerAppShell() {
                 <h2 className="order-card__title">{item.productName}</h2>
                 <img className="mini-product-img" src={resolveImageUrl(item.imageUrl)} alt={item.productName} loading="lazy" decoding="async" />
                 <p style={{ color: "var(--text-muted)" }}>Seller: {item.sellerId}</p>
-                <p style={{ marginTop: 6, marginBottom: 10 }}>{money(item.unitPrice)} x {item.quantity} = <strong>{money(item.lineTotal)}</strong></p>
+                <p style={{ marginTop: 6, marginBottom: 10 }}>
+                  {Number(item.discountPercentage || 0) > 0 ? (
+                    <>
+                      <span className="product-price-original">{money(item.originalPrice ?? item.unitPrice)}</span>{" "}
+                      <strong>{money(item.unitPrice)}</strong>
+                      <span className="product-discount-badge" style={{ marginLeft: 8 }}>{Math.round(Number(item.discountPercentage || 0))}% OFF</span>
+                    </>
+                  ) : money(item.unitPrice)}
+                  {" x "}{item.quantity} = <strong>{money(item.lineTotal)}</strong>
+                </p>
                 <div className="quantity-row">
                   <button type="button" className="qty-btn" onClick={() => updateCartQuantity(item.productId, Math.max(0, item.quantity - 1))}>-</button>
                   <span>{item.quantity}</span>

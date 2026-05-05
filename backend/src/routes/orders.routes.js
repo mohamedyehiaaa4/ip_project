@@ -20,6 +20,12 @@ function normalizePaymentMethod(value) {
   return PAYMENT_METHODS.includes(candidate) ? candidate : "Cash on Delivery";
 }
 
+function getDiscountedPrice(price, discountPercentage) {
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
+  return basePrice * (1 - discount / 100);
+}
+
 function validateCardDetails(cardDetails) {
   if (!cardDetails) return "Card details are required for Credit Card payment";
   const { cardNumber, cardHolder, cardExpiry, cardCVV } = cardDetails;
@@ -86,8 +92,9 @@ router.post("/", auth("buyer"), async (req, res) => {
       }
 
       const quantity = Math.max(1, Number(rawItem.quantity || 1));
-      orderItems.push({ productId: p._id, quantity, price: p.price });
-      totalPrice += p.price * quantity;
+      const unitPrice = getDiscountedPrice(p.price, p.discountPercentage);
+      orderItems.push({ productId: p._id, quantity, price: unitPrice });
+      totalPrice += unitPrice * quantity;
       expectedDeliveryDays = Math.max(expectedDeliveryDays, Number(p.deliveryDays || 1));
     }
 
