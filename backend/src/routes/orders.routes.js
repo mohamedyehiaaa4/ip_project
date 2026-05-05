@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const Product = require("../models/Product");
 const User = require("../models/User");
@@ -277,6 +278,28 @@ router.patch("/buyer/:id/cancel", auth("buyer"), async (req, res) => {
     return res.json(order);
   } catch (err) {
     return res.status(500).json({ message: "Failed to cancel order", error: err.message });
+  }
+});
+
+router.get("/seller/rating", auth("seller"), async (req, res) => {
+  try {
+    const stats = await BuyerSellerRating.aggregate([
+      { $match: { sellerId: new mongoose.Types.ObjectId(req.user.id) } },
+      {
+        $group: {
+          _id: "$sellerId",
+          averageRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 }
+        }
+      }
+    ]);
+
+    return res.json({
+      rating: Number(stats[0]?.averageRating || 0),
+      reviewCount: Number(stats[0]?.reviewCount || 0)
+    });
+  } catch (err) {
+    return res.status(500).json({ message: "Failed to fetch seller rating", error: err.message });
   }
 });
 

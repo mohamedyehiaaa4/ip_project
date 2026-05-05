@@ -5,26 +5,18 @@ export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
-  const [stats, setStats] = useState({ productsSold: 0 });
+  const [ratingSummary, setRatingSummary] = useState({ rating: 0, reviewCount: 0 });
 
   const loadDashboard = useCallback(() => {
-    Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
-      .then(([p, o, profile]) => {
+    Promise.all([api.myProducts(), api.myOrders(), api.myProfile(), api.sellerRating()])
+      .then(([p, o, profile, ratingData]) => {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
-        setStats({ productsSold: countDeliveredItems(o) });
-
-        api.sellerStats()
-          .then((dashboardStats) => {
-            const backendProductsSold = Number(dashboardStats?.productsSold);
-            if (Number.isFinite(backendProductsSold)) {
-              setStats({ productsSold: backendProductsSold });
-            }
-          })
-          .catch((err) => {
-            console.warn("Failed to load seller stats; using delivered orders fallback", err);
-          });
+        setRatingSummary({
+          rating: Number(ratingData?.rating || 0),
+          reviewCount: Number(ratingData?.reviewCount || 0)
+        });
       })
       .catch(console.error);
   }, []);
@@ -35,10 +27,8 @@ export default function DashboardPage({ isActive = true }) {
 
   // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
   const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
-  const reviewCount = products.reduce((sum, p) => sum + Number(p.reviewCount || 0), 0);
-  const sellerRating = reviewCount
-    ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
-    : null;
+  const reviewCount = Number(ratingSummary.reviewCount || 0);
+  const sellerRating = reviewCount ? Number(ratingSummary.rating || 0) : null;
   const recentOrders = orders.slice(0, 5);
 
   return (
