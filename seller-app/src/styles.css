@@ -1020,3 +1020,18 @@
   margin-bottom: 10px;
 }
 
+
+
+.order-address {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.order-address strong {
+  color: #1e40af;
+}

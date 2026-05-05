@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
+function formatAddress(address) {
+  if (!address) return "No delivery address provided";
+  return [address.line1, address.city, address.country, address.postalCode].filter(Boolean).join(", ") || "No delivery address provided";
+}
+
 export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -86,6 +91,9 @@ export default function DashboardPage({ isActive = true }) {
                 <h3>Order #{String(order._id).slice(-6)}</h3>
                 <div className="order-meta">
                   Customer: {order.buyerName || "Unknown"}
+                </div>
+                <div className="order-address">
+                  <strong>Delivery Address:</strong> {formatAddress(order.deliveryAddress)}
                 </div>
                 <div className="order-meta" style={{ fontSize: 12, color: order.paymentStatus === "Paid" ? "green" : "#f59e0b" }}>
                   Payment: {order.paymentStatus || "Pending"} ({order.paymentMethod || "Cash on Delivery"})

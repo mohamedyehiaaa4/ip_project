@@ -435,14 +435,25 @@ function BuyerAppShell() {
 
   const onOrderNow = useCallback(async (product) => {
     try {
-      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod);
+      if (!savedAddresses.length) {
+        pushToast("Add at least one delivery address before placing an order", "info");
+        setScreen("profile");
+        return;
+      }
+
+      if (!selectedAddressId) {
+        pushToast("Choose a delivery address for this order", "info");
+        return;
+      }
+
+      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod, paymentMethod === "Credit Card" ? cardDetails : null, selectedAddressId);
       await refreshAll();
       setScreen("orders");
       pushToast("Order placed", "success");
     } catch (err) {
       pushToast(err.message || "Failed to place order", "error");
     }
-  }, [paymentMethod, pushToast]);
+  }, [cardDetails, paymentMethod, pushToast, refreshAll, savedAddresses.length, selectedAddressId]);
 
   const onOpenDetails = useCallback(async (product) => {
     setProductDetail({ product, comments: [], loading: true });

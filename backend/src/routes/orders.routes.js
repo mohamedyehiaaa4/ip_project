@@ -41,6 +41,16 @@ function validateCardDetails(cardDetails) {
   return null;
 }
 
+function snapshotAddress(address = {}) {
+  return {
+    label: String(address.label || "Delivery Address").trim() || "Delivery Address",
+    line1: String(address.line1 || "").trim(),
+    city: String(address.city || "").trim(),
+    country: String(address.country || "").trim(),
+    postalCode: String(address.postalCode || "").trim()
+  };
+}
+
 async function rollbackOrderStock(order) {
   const updates = (order.products || []).map((item) => ({
     updateOne: {
@@ -110,7 +120,7 @@ async function recomputeSellerDeliveredProductSales(sellerId) {
 
 router.post("/", auth("buyer"), async (req, res) => {
   try {
-    const { items, paymentMethod, cardDetails } = req.body || {};
+    const { items, paymentMethod, cardDetails, deliveryAddressId } = req.body || {};
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ message: "items[] is required" });
     }
@@ -120,6 +130,24 @@ router.post("/", auth("buyer"), async (req, res) => {
       const cardError = validateCardDetails(cardDetails);
       if (cardError) return res.status(400).json({ message: cardError });
     }
+
+    const buyer = await User.findById(req.user.id).select("addresses");
+    if (!buyer) return res.status(404).json({ message: "Buyer not found" });
+
+    const addresses = Array.isArray(buyer.addresses) ? buyer.addresses : [];
+    if (!addresses.length) {
+      return res.status(400).json({ message: "Please add at least one delivery address before placing an order" });
+    }
+
+    const selectedAddress = deliveryAddressId
+      ? addresses.find((address) => String(address._id) === String(deliveryAddressId))
+      : addresses.find((address) => address.isDefault) || addresses[0];
+
+    if (!selectedAddress) {
+      return res.status(400).json({ message: "Please select a valid delivery address" });
+    }
+
+    const deliveryAddress = snapshotAddress(selectedAddress);
 
     const products = await Product.find({ _id: { $in: items.map((i) => i.productId) }, isActive: true });
     if (!products.length) return res.status(400).json({ message: "No valid products found" });
@@ -188,7 +216,8 @@ router.post("/", auth("buyer"), async (req, res) => {
       paymentMethod: resolvedMethod,
       paymentStatus: isCreditCard ? "Paid" : "Pending",
       expectedDeliveryDays,
-      expectedDeliveryDate: addDays(new Date(), expectedDeliveryDays)
+      expectedDeliveryDate: addDays(new Date(), expectedDeliveryDays),
+      deliveryAddress
     };
 
     if (isCreditCard) {
@@ -393,6 +422,7 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
         total_amount: order.totalPrice,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
+        deliveryAddress: order.deliveryAddress || null,
         createdAt: order.createdAt,
         created_at: order.createdAt,
         buyer_rating: r ? r.rating : null,
