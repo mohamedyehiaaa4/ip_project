@@ -5,6 +5,7 @@ export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [stats, setStats] = useState({ productsSold: 0 });
 
   const loadDashboard = useCallback(() => {
     Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
@@ -12,6 +13,18 @@ export default function DashboardPage({ isActive = true }) {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
+        setStats({ productsSold: countDeliveredItems(o) });
+
+        api.sellerStats()
+          .then((dashboardStats) => {
+            const backendProductsSold = Number(dashboardStats?.productsSold);
+            if (Number.isFinite(backendProductsSold)) {
+              setStats({ productsSold: backendProductsSold });
+            }
+          })
+          .catch((err) => {
+            console.warn("Failed to load seller stats; using delivered orders fallback", err);
+          });
       })
       .catch(console.error);
   }, []);

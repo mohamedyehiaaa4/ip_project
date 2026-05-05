@@ -71,6 +71,7 @@ export const api = {
   }),
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE" }),
   myOrders: () => request("/orders/seller/me"),
+  sellerStats: () => request("/orders/seller/stats"),
   updateOrderStatus: (id, status) => request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   rateBuyer: (payload) => request("/orders/seller/ratings/buyer", { method: "POST", body: JSON.stringify(payload) }),
   flagUser: (payload) => request("/flags", { method: "POST", body: JSON.stringify(payload) }),
