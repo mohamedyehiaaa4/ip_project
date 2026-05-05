@@ -48,7 +48,7 @@ function SellerShell({ onLoggedOut }) {
 
       <div className={`section ${tab === "dashboard" ? "active" : ""}`} id="dashboardSection">
         <div className="container">
-          <DashboardPage />
+          <DashboardPage isActive={tab === "dashboard"} />
         </div>
       </div>
 
