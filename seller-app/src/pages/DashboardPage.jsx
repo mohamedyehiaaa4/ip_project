@@ -1,20 +1,43 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
-export default function DashboardPage() {
+function countDeliveredItems(orders) {
+  return (orders || [])
+    .filter((order) => order.status === "Delivered")
+    .reduce((sum, order) => sum + ((order.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0)), 0);
+}
+
+export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
+  const [stats, setStats] = useState({ productsSold: 0 });
 
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
     Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
       .then(([p, o, profile]) => {
         setProducts(p);
         setOrders(o);
         setBalance(Number(profile.balance || 0));
+        setStats({ productsSold: countDeliveredItems(o) });
+
+        api.sellerStats()
+          .then((dashboardStats) => {
+            const backendProductsSold = Number(dashboardStats?.productsSold);
+            if (Number.isFinite(backendProductsSold)) {
+              setStats({ productsSold: backendProductsSold });
+            }
+          })
+          .catch((err) => {
+            console.warn("Failed to load seller stats; using delivered orders fallback", err);
+          });
       })
       .catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (isActive) loadDashboard();
+  }, [isActive, loadDashboard]);
 
   // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
   const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
@@ -22,10 +45,7 @@ export default function DashboardPage() {
   const sellerRating = reviewCount
     ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
     : null;
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const ordersThisWeek = orders.filter((o) => new Date(o.createdAt) >= oneWeekAgo).length;
-  const productsSold = orders.reduce((sum, o) => sum + ((o.products || []).reduce((s, i) => s + Number(i.quantity || 0), 0)), 0);
+  const productsSold = Number(stats.productsSold || 0);
   const recentOrders = orders.slice(0, 5);
 
   return (
@@ -54,14 +74,9 @@ export default function DashboardPage() {
           <div className="metric-subtitle">{reviewCount} customer review{reviewCount === 1 ? "" : "s"}</div>
         </div>
         <div className="metric-card">
-          <div className="metric-label">Orders This Week</div>
-          <div className="metric-value">{ordersThisWeek}</div>
-          <div className="metric-subtitle">New orders</div>
-        </div>
-        <div className="metric-card">
           <div className="metric-label">Products Sold</div>
           <div className="metric-value">{productsSold}</div>
-          <div className="metric-subtitle">All time</div>
+          <div className="metric-subtitle">Delivered orders only</div>
         </div>
       </div>
 
