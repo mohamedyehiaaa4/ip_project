@@ -60,18 +60,24 @@ async function rollbackOrderStock(order) {
   }
 }
 
-async function updateDeliveredProductSales(order, direction = 1) {
-  const updates = (order.products || []).map((item) => ({
+async function recomputeSellerDeliveredProductSales(sellerId) {
+  const [sellerProducts, deliveredOrders] = await Promise.all([
+    Product.find({ sellerId }).select("_id").lean(),
+    Order.find({ sellerId, status: "Delivered" }).select("products").lean()
+  ]);
+
+  const soldByProduct = new Map();
+  for (const order of deliveredOrders) {
+    for (const item of order.products || []) {
+      const key = String(item.productId);
+      soldByProduct.set(key, (soldByProduct.get(key) || 0) + Number(item.quantity || 0));
+    }
+  }
+
+  const updates = sellerProducts.map((product) => ({
     updateOne: {
-      filter: {
-        _id: item.productId,
-        sellerId: order.sellerId
-      },
-      update: {
-        $inc: {
-          orders: Number(item.quantity || 0) * direction
-        }
-      }
+      filter: { _id: product._id, sellerId },
+      update: { $set: { orders: soldByProduct.get(String(product._id)) || 0 } }
     }
   }));
 
@@ -362,7 +368,9 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
       return res.status(400).json({ message: "Cancelled orders cannot be reopened" });
     }
 
-    if (status === "Cancelled" && order.status !== "Cancelled") {
+    const previousStatus = order.status;
+
+    if (status === "Cancelled" && previousStatus !== "Cancelled") {
       await rollbackOrderStock(order);
     }
 
@@ -375,7 +383,7 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
     // Credit seller balance when COD order is delivered
     if (
       status === "Delivered" &&
-      order.status !== "Delivered" &&
+      previousStatus !== "Delivered" &&
       order.paymentMethod === "Cash on Delivery"
     ) {
       await User.findByIdAndUpdate(order.sellerId, { $inc: { balance: order.totalPrice } });
@@ -384,6 +392,11 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
 
     order.status = status;
     await order.save();
+
+    if (status === "Delivered" || previousStatus === "Delivered") {
+      await recomputeSellerDeliveredProductSales(order.sellerId);
+    }
+
     return res.json(order);
   } catch (err) {
     return res.status(500).json({ message: "Failed to update order", error: err.message });
