@@ -684,6 +684,17 @@ function BuyerAppShell() {
     }
   }
 
+
+  async function resolveFlag(flagId) {
+    try {
+      await api.deleteFlag(flagId);
+      setMyFlags((prev) => prev.filter((flag) => String(flag._id) !== String(flagId)));
+      pushToast("Report marked as resolved", "success");
+    } catch (err) {
+      pushToast(err.message || "Failed to resolve report", "error");
+    }
+  }
+
   async function submitReport() {
     try {
       if (!reportForm.orderId || !reportForm.sellerId || !reportForm.reason.trim()) {
@@ -1370,6 +1381,26 @@ function BuyerAppShell() {
                         )}
                         <span>Submitted: {new Date(flag.createdAt).toLocaleDateString()}</span>
                       </div>
+                      {isFiled && flag.status === "Open" && (
+                        <div style={{ marginTop: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => resolveFlag(flag._id)}
+                            style={{
+                              padding: "8px 18px",
+                              borderRadius: 8,
+                              border: "none",
+                              background: "#dcfce7",
+                              color: "#15803d",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              fontSize: 13
+                            }}
+                          >
+                            ✅ Mark as Resolved
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 }) : (
