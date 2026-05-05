@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 
-export default function DashboardPage() {
+export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
 
-  useEffect(() => {
+  const loadDashboard = useCallback(() => {
     Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
       .then(([p, o, profile]) => {
         setProducts(p);
@@ -16,15 +16,19 @@ export default function DashboardPage() {
       .catch(console.error);
   }, []);
 
+  useEffect(() => {
+    if (isActive) loadDashboard();
+  }, [isActive, loadDashboard]);
+
   // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
   const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
   const reviewCount = products.reduce((sum, p) => sum + Number(p.reviewCount || 0), 0);
   const sellerRating = reviewCount
     ? products.reduce((sum, p) => sum + (Number(p.ratings || 0) * Number(p.reviewCount || 0)), 0) / reviewCount
     : null;
-  const productsSold = orders
-    .filter((o) => o.status === "Delivered")
-    .reduce((sum, o) => sum + ((o.products || []).reduce((s, i) => s + Number(i.quantity || 0), 0)), 0);
+
+  const productsSold = products.reduce((sum, p) => sum + Number(p.orders || 0), 0);
+
   const recentOrders = orders.slice(0, 5);
 
   return (
