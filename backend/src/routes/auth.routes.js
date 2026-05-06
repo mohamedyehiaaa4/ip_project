@@ -1,105 +1,10 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const mysql = require("mysql2/promise");
 const User = require("../models/User");
 const { validateEmail, validatePassword } = require("../middleware/auth");
 
 const router = express.Router();
-
-let legacyPool = null;
-
-function getLegacyPool() {
-  const mysqlHost = process.env.MYSQL_HOST || process.env.DB_HOST;
-  const mysqlUser = process.env.MYSQL_USER || process.env.DB_USER;
-  const mysqlPassword = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD;
-  const mysqlDatabase = process.env.MYSQL_DATABASE || process.env.DB_NAME || "marketplace";
-
-  if (!mysqlHost || !mysqlUser) {
-    return null;
-  }
-
-  if (!legacyPool) {
-    legacyPool = mysql.createPool({
-      host: mysqlHost,
-      port: Number(process.env.MYSQL_PORT || process.env.DB_PORT || 3306),
-      user: mysqlUser,
-      password: mysqlPassword || "",
-      database: mysqlDatabase,
-      waitForConnections: true,
-      connectionLimit: 5
-    });
-  }
-
-  return legacyPool;
-}
-
-async function upsertLegacyUserIntoMongo(legacyUser, role) {
-  const payload = {
-    name: legacyUser.name,
-    email: String(legacyUser.email).toLowerCase().trim(),
-    password: legacyUser.password_hash,
-    role,
-    businessName: role === "seller" ? String(legacyUser.business_name || "").trim() : "",
-    supportEmail: legacyUser.support_email || "",
-    phone: legacyUser.phone || "",
-    addressLine: legacyUser.address_line || "",
-    city: legacyUser.city || "",
-    country: legacyUser.country || ""
-  };
-
-  await User.updateOne(
-    { email: payload.email },
-    { $setOnInsert: payload },
-    { upsert: true }
-  );
-
-  return payload;
-}
-
-async function findLegacyAccount(email, password) {
-  const pool = getLegacyPool();
-  if (!pool) return null;
-
-  const cleanEmail = String(email).toLowerCase().trim();
-  const checks = [
-    {
-      role: "seller",
-      query: "SELECT id, owner_name AS name, business_name, email, password_hash, support_email, phone, address_line, city, country FROM sellers WHERE email = ? LIMIT 1"
-    },
-    {
-      role: "buyer",
-      query: "SELECT id, full_name AS name, email, password_hash, phone, address_line, city, country FROM buyers WHERE email = ? LIMIT 1"
-    }
-  ];
-
-  for (const item of checks) {
-    const [rows] = await pool.query(item.query, [cleanEmail]);
-    if (!rows.length) continue;
-
-    const legacyUser = rows[0];
-    const ok = await bcrypt.compare(password, legacyUser.password_hash);
-    if (!ok) continue;
-
-    await upsertLegacyUserIntoMongo(legacyUser, item.role);
-
-    return {
-      id: legacyUser.id,
-      name: legacyUser.name,
-      email: cleanEmail,
-      role: item.role,
-      flags: 0,
-      businessName: item.role === "seller" ? legacyUser.business_name || "" : "",
-      supportEmail: legacyUser.support_email || "",
-      phone: legacyUser.phone || "",
-      addressLine: legacyUser.address_line || "",
-      city: legacyUser.city || "",
-      country: legacyUser.country || ""
-    };
-  }
-
-  return null;
-}
 
 function createToken(user) {
   return jwt.sign(
@@ -174,27 +79,17 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid email format" });
     }
 
-    const user = await User.findOne({ email: String(email).toLowerCase().trim() });
-    let authUser = user;
-
-    if (authUser) {
-      const ok = await bcrypt.compare(password, authUser.password);
-      if (!ok) {
-        authUser = null;
-      }
-    }
-
-    if (!authUser) {
-      authUser = await findLegacyAccount(email, password);
-    }
-
+    const authUser = await User.findOne({ email: String(email).toLowerCase().trim() });
     if (!authUser) return res.status(401).json({ message: "Invalid credentials" });
+
+    const ok = await bcrypt.compare(password, authUser.password);
+    if (!ok) return res.status(401).json({ message: "Invalid credentials" });
 
     const token = createToken(authUser);
     return res.json({
       token,
       user: {
-        id: authUser._id || authUser.id,
+        id: authUser._id,
         name: authUser.name,
         email: authUser.email,
         role: authUser.role,
