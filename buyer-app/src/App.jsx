@@ -117,15 +117,26 @@ function AuthScreen({ onAuthed }) {
       <aside className="auth-cover" aria-label="Marketplace shopping preview">
         <div className="auth-cover__photo">
           <div className="auth-cover__sun" />
+          <div className="auth-cover__sparkle auth-cover__sparkle--one">✦</div>
+          <div className="auth-cover__sparkle auth-cover__sparkle--two">✧</div>
           <div className="auth-cover__bag auth-cover__bag--primary">🛍️</div>
           <div className="auth-cover__bag auth-cover__bag--secondary">📦</div>
           <div className="auth-cover__product auth-cover__product--one" />
           <div className="auth-cover__product auth-cover__product--two" />
+          <div className="auth-cover__floating-card">
+            <strong>2-day delivery</strong>
+            <span>Live order updates</span>
+          </div>
         </div>
         <div className="auth-cover__content">
           <span className="auth-cover__eyebrow">Buyer marketplace</span>
           <h2>Discover trusted products from local sellers.</h2>
           <p>Save addresses, track orders, and checkout securely from one clean shopping space.</p>
+          <div className="auth-cover__features" aria-label="Buyer marketplace benefits">
+            <span>🔒 Secure checkout</span>
+            <span>📍 Saved addresses</span>
+            <span>⭐ Trusted ratings</span>
+          </div>
         </div>
       </aside>
 
@@ -180,6 +191,12 @@ function AuthScreen({ onAuthed }) {
             {mode === "login" ? "Sign In" : "Create Account"}
           </button>
         </form>
+
+        <div className="auth-benefits" aria-label="Account benefits">
+          <span>Fast checkout</span>
+          <span>Easy returns</span>
+          <span>Order history</span>
+        </div>
 
         <p className="auth-footer">
           {mode === "login" ? "No account?" : "Already registered?"}{" "}
