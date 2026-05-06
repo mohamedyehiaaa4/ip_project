@@ -91,7 +91,7 @@ router.get("/seller/me/list", auth("seller"), async (req, res) => {
   try {
     const [products, sellerOrders] = await Promise.all([
       Product.find({ sellerId: req.user.id }).sort({ createdAt: -1 }).lean(),
-      Order.find({ sellerId: req.user.id, status: { $ne: "Cancelled" } }).select("products").lean()
+      Order.find({ sellerId: req.user.id, status: "Delivered" }).select("products").lean()
     ]);
 
     const soldByProduct = new Map();
@@ -104,13 +104,10 @@ router.get("/seller/me/list", auth("seller"), async (req, res) => {
 
     const normalized = products.map((product) => {
       const soldFromOrders = soldByProduct.get(String(product._id)) || 0;
-      const trackedOrders = Number(product.orders || 0);
-      const stockDelta = Math.max(0, soldFromOrders - trackedOrders);
 
       return {
         ...product,
-        orders: Math.max(trackedOrders, soldFromOrders),
-        inventory: Math.max(0, Number(product.inventory || 0) - stockDelta)
+        orders: soldFromOrders
       };
     });
 
