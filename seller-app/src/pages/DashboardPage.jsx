@@ -57,6 +57,12 @@ export default function DashboardPage({ isActive = true }) {
   const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
   const reviewCount = Number(ratingSummary.reviewCount || 0);
   const sellerRating = reviewCount ? Number(ratingSummary.rating || 0) : null;
+  const productsSold = orders
+    .filter((order) => order.status === "Delivered")
+    .reduce(
+      (sum, order) => sum + (order.products || []).reduce((itemSum, item) => itemSum + Number(item.quantity || 0), 0),
+      0
+    );
   const recentOrders = orders.slice(0, 5);
 
   return (
@@ -83,6 +89,11 @@ export default function DashboardPage({ isActive = true }) {
           <div className="metric-label">Seller Rating</div>
           <div className="metric-value">{sellerRating ? `${sellerRating.toFixed(1)} ★` : "Not rated"}</div>
           <div className="metric-subtitle">{reviewCount} customer review{reviewCount === 1 ? "" : "s"}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Products Sold</div>
+          <div className="metric-value">{productsSold}</div>
+          <div className="metric-subtitle">Delivered orders only</div>
         </div>
       </div>
 
