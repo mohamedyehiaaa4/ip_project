@@ -497,24 +497,24 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
       await rollbackOrderStock(order);
     }
 
-    if (status === "Delivered" && order.status !== "Delivered") {
-      await updateDeliveredProductSales(order, 1);
-    } else if (status !== "Delivered" && order.status === "Delivered") {
-      await updateDeliveredProductSales(order, -1);
-    }
-
-    // Credit seller balance when COD order is delivered
-    if (
+    const shouldCreditCodBalance =
       status === "Delivered" &&
       previousStatus !== "Delivered" &&
-      order.paymentMethod === "Cash on Delivery"
-    ) {
-      await User.findByIdAndUpdate(order.sellerId, { $inc: { balance: order.totalPrice } });
+      order.paymentMethod === "Cash on Delivery";
+
+    order.status = status;
+    if (shouldCreditCodBalance) {
       order.paymentStatus = "Paid";
     }
 
-    order.status = status;
-    await order.save();
+    // Older orders may be missing fields that are now required on order items.
+    // Validate only the status/payment fields changed here so sellers can still
+    // move those legacy orders to Delivered.
+    await order.save({ validateModifiedOnly: true });
+
+    if (shouldCreditCodBalance) {
+      await User.findByIdAndUpdate(order.sellerId, { $inc: { balance: Number(order.totalPrice || 0) } });
+    }
 
     if (status === "Delivered" || previousStatus === "Delivered") {
       await recomputeSellerDeliveredProductSales(order.sellerId);
@@ -522,7 +522,7 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
 
     return res.json(order);
   } catch (err) {
-    return res.status(500).json({ message: "Failed to update order", error: err.message });
+    return res.status(500).json({ message: err.message || "Failed to update order" });
   }
 });
 
