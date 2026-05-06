@@ -417,11 +417,14 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
       return res.status(400).json({ message: "Please add at least one delivery address before checkout" });
     }
 
+    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0];
     const selectedAddress = deliveryAddressId
       ? addresses.find((address) => String(address._id) === String(deliveryAddressId))
-      : addresses.find((address) => address.isDefault) || addresses[0];
+      : defaultAddress;
 
-    const addressToSnapshot = selectedAddress || (hasAddressDetails(requestDeliveryAddress) ? requestDeliveryAddress : null);
+    const addressToSnapshot = hasAddressDetails(requestDeliveryAddress)
+      ? requestDeliveryAddress
+      : selectedAddress || defaultAddress || null;
 
     if (!addressToSnapshot) {
       return res.status(400).json({ message: "Please select a valid delivery address" });

@@ -1650,3 +1650,36 @@ body {
   cursor: pointer;
   white-space: nowrap;
 }
+
+/* Keep only the buyer home dashboard full-width; put all other app pages back into a centered panel. */
+.screen.screen--home {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  min-height: calc(100vh - var(--nav-height));
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.screen.screen--contained {
+  width: min(1120px, calc(100% - 32px));
+  max-width: 1120px;
+  min-height: auto;
+  margin: 24px auto 110px;
+  padding: 28px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 640px) {
+  .screen.screen--contained {
+    width: min(100% - 20px, 1120px);
+    margin-top: 12px;
+    padding: 18px;
+    border-radius: 20px;
+  }
+}

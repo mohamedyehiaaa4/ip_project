@@ -354,7 +354,8 @@ function BuyerAppShell() {
   }, [selectedReportOrder]);
 
   const savedAddresses = Array.isArray(profile.addresses) ? profile.addresses : [];
-  const selectedAddress = savedAddresses.find((address) => String(address._id) === String(selectedAddressId)) || null;
+  const defaultAddress = savedAddresses.find((address) => address.isDefault) || savedAddresses[0] || null;
+  const selectedAddress = savedAddresses.find((address) => String(address._id) === String(selectedAddressId)) || defaultAddress;
 
   const applyOptimisticCartAdd = useCallback((product, quantity = 1) => {
     setCart((prev) => {
@@ -441,12 +442,18 @@ function BuyerAppShell() {
         return;
       }
 
-      if (!selectedAddressId) {
+      if (!selectedAddress) {
         pushToast("Choose a delivery address for this order", "info");
         return;
       }
 
-      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod, paymentMethod === "Credit Card" ? cardDetails : null, selectedAddressId, selectedAddress);
+      await api.placeOrder(
+        [{ productId: product._id, quantity: 1 }],
+        paymentMethod,
+        paymentMethod === "Credit Card" ? cardDetails : null,
+        selectedAddress._id || selectedAddressId,
+        selectedAddress
+      );
       await refreshAll();
       setScreen("orders");
       pushToast("Order placed", "success");
@@ -600,7 +607,7 @@ function BuyerAppShell() {
         setScreen("profile");
         return;
       }
-      if (!selectedAddressId) {
+      if (!selectedAddress) {
         pushToast("Choose a delivery address for this order", "info");
         return;
       }
@@ -611,7 +618,7 @@ function BuyerAppShell() {
           return;
         }
       }
-      const payload = { paymentMethod, deliveryAddressId: selectedAddressId, deliveryAddress: selectedAddress };
+      const payload = { paymentMethod, deliveryAddressId: selectedAddress._id || selectedAddressId, deliveryAddress: selectedAddress };
       if (paymentMethod === "Credit Card") payload.cardDetails = cardDetails;
       await api.checkoutCart(payload);
       await refreshAll();
@@ -759,7 +766,7 @@ function BuyerAppShell() {
         ))}
       </div>
 
-      <div className={`screen ${screen === "home" ? "active" : ""}`} id="home">
+      <div className={`screen screen--home ${screen === "home" ? "active" : ""}`} id="home">
         {screen === "home" ? (
           <div>
             <div className="buyer-hero">
@@ -963,7 +970,7 @@ function BuyerAppShell() {
         </div>
       ) : null}
 
-      <div className={`screen ${screen === "cart" ? "active" : ""}`} id="cart">
+      <div className={`screen screen--contained ${screen === "cart" ? "active" : ""}`} id="cart">
         {screen === "cart" ? (
           <div>
             <h1 className="header">Cart</h1>
@@ -1090,7 +1097,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "orders" ? "active" : ""}`} id="orders">
+      <div className={`screen screen--contained ${screen === "orders" ? "active" : ""}`} id="orders">
         {screen === "orders" ? (
           <div>
             <h1 className="header">Orders</h1>
@@ -1174,7 +1181,7 @@ function BuyerAppShell() {
       </div>
 
 
-      <div className={`screen ${screen === "wishlist" ? "active" : ""}`} id="wishlist">
+      <div className={`screen screen--contained ${screen === "wishlist" ? "active" : ""}`} id="wishlist">
         {screen === "wishlist" ? (
           <div>
             <h1 className="header">Wishlist</h1>
@@ -1196,7 +1203,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "profile" ? "active" : ""}`} id="profile">
+      <div className={`screen screen--contained ${screen === "profile" ? "active" : ""}`} id="profile">
         {screen === "profile" ? (
           <div>
             <h1 className="header">Profile</h1>
@@ -1249,7 +1256,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "report" ? "active" : ""}`} id="report">
+      <div className={`screen screen--contained ${screen === "report" ? "active" : ""}`} id="report">
         {screen === "report" ? (
           <div>
             <h1 className="header">Reports</h1>
