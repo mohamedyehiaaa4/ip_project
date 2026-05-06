@@ -93,7 +93,11 @@ export default function DashboardPage({ isActive = true }) {
                   Customer: {order.buyerName || "Unknown"}
                 </div>
                 <div className="order-address">
-                  <strong>Delivery Address:</strong> {formatAddress(order.deliveryAddress)}
+                  <span className="order-address__icon" aria-hidden="true">📍</span>
+                  <span className="order-address__content">
+                    <strong>Delivery Address</strong>
+                    <small>{formatAddress(order.deliveryAddress)}</small>
+                  </span>
                 </div>
                 <div className="order-meta" style={{ fontSize: 12, color: order.paymentStatus === "Paid" ? "green" : "#f59e0b" }}>
                   Payment: {order.paymentStatus || "Pending"} ({order.paymentMethod || "Cash on Delivery"})

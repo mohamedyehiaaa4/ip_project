@@ -44,11 +44,41 @@ function validateCardDetails(cardDetails) {
 function snapshotAddress(address = {}) {
   return {
     label: String(address.label || "Delivery Address").trim() || "Delivery Address",
-    line1: String(address.line1 || "").trim(),
+    line1: String(address.line1 || address.addressLine || "").trim(),
     city: String(address.city || "").trim(),
     country: String(address.country || "").trim(),
     postalCode: String(address.postalCode || "").trim()
   };
+}
+
+function hasAddressDetails(address = {}) {
+  return Boolean(
+    address &&
+    [address.line1, address.addressLine, address.city, address.country, address.postalCode].some((value) => String(value || "").trim())
+  );
+}
+
+function resolveDeliveryAddress(order = {}, buyer = {}) {
+  if (hasAddressDetails(order.deliveryAddress)) {
+    return snapshotAddress(order.deliveryAddress);
+  }
+
+  const savedAddresses = Array.isArray(buyer.addresses) ? buyer.addresses : [];
+  const fallbackAddress = savedAddresses.find((address) => address.isDefault) || savedAddresses[0];
+  if (hasAddressDetails(fallbackAddress)) {
+    return snapshotAddress(fallbackAddress);
+  }
+
+  if (hasAddressDetails(buyer)) {
+    return snapshotAddress({
+      label: "Buyer Profile Address",
+      addressLine: buyer.addressLine,
+      city: buyer.city,
+      country: buyer.country
+    });
+  }
+
+  return null;
 }
 
 async function rollbackOrderStock(order) {
@@ -389,11 +419,11 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
     const orderIds = orders.map((o) => o._id);
 
     const [buyers, ratings] = await Promise.all([
-      User.find({ _id: { $in: buyerIds } }).select("name").lean(),
+      User.find({ _id: { $in: buyerIds } }).select("name addresses addressLine city country").lean(),
       SellerBuyerRating.find({ orderId: { $in: orderIds }, sellerId: req.user.id }).lean()
     ]);
 
-    const buyerMap = new Map(buyers.map((b) => [String(b._id), b.name]));
+    const buyerMap = new Map(buyers.map((b) => [String(b._id), b]));
     const ratingMap = new Map(ratings.map((r) => [String(r.orderId), r]));
 
     const productIds = [...new Set(orders.flatMap((o) => (o.products || []).map((p) => String(p.productId))))];
@@ -403,13 +433,15 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
     const payload = orders.map((order) => {
       const firstItem = order.products?.[0];
       const r = ratingMap.get(String(order._id));
+      const buyer = buyerMap.get(String(order.buyerId));
+      const buyerName = buyer?.name || "Unknown";
       return {
         _id: order._id,
         id: String(order._id),
         buyerId: order.buyerId,
         buyer_id: order.buyerId,
-        buyerName: buyerMap.get(String(order.buyerId)) || "Unknown",
-        buyer_name: buyerMap.get(String(order.buyerId)) || "Unknown",
+        buyerName,
+        buyer_name: buyerName,
         product: firstItem ? productMap.get(String(firstItem.productId)) || "Unknown product" : "No product",
         products: (order.products || []).map((item) => ({
           productId: item.productId,
@@ -422,7 +454,7 @@ router.get("/seller/me", auth("seller"), async (req, res) => {
         total_amount: order.totalPrice,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
-        deliveryAddress: order.deliveryAddress || null,
+        deliveryAddress: resolveDeliveryAddress(order, buyer),
         createdAt: order.createdAt,
         created_at: order.createdAt,
         buyer_rating: r ? r.rating : null,
