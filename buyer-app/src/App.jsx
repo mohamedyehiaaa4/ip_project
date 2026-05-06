@@ -114,6 +114,21 @@ function AuthScreen({ onAuthed }) {
 
   return (
     <main className="auth-wrapper">
+      <aside className="auth-cover" aria-label="Marketplace shopping preview">
+        <div className="auth-cover__photo">
+          <div className="auth-cover__sun" />
+          <div className="auth-cover__bag auth-cover__bag--primary">🛍️</div>
+          <div className="auth-cover__bag auth-cover__bag--secondary">📦</div>
+          <div className="auth-cover__product auth-cover__product--one" />
+          <div className="auth-cover__product auth-cover__product--two" />
+        </div>
+        <div className="auth-cover__content">
+          <span className="auth-cover__eyebrow">Buyer marketplace</span>
+          <h2>Discover trusted products from local sellers.</h2>
+          <p>Save addresses, track orders, and checkout securely from one clean shopping space.</p>
+        </div>
+      </aside>
+
       <section className="auth-card">
         <div className="auth-logo">
           <div className="logo-icon">{mode === "login" ? "🔐" : "✨"}</div>

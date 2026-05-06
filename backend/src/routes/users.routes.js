@@ -501,6 +501,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
         totalPrice,
         paymentMethod,
         paymentStatus: isCreditCard ? "Paid" : "Pending",
+        sellerEarningsCredited: false,
         expectedDeliveryDays,
         expectedDeliveryDate: addDays(new Date(), expectedDeliveryDays),
         deliveryAddress
@@ -511,7 +512,6 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
         orderData.cardLast4 = rawNumber.slice(-4);
         orderData.cardHolderName = cardDetails.cardHolder.trim();
         orderData.cardExpiry = cardDetails.cardExpiry;
-        await User.findByIdAndUpdate(sellerId, { $inc: { balance: totalPrice } });
       }
 
       const order = await Order.create(orderData);

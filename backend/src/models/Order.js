@@ -44,6 +44,7 @@ const orderSchema = new mongoose.Schema(
     cardLast4: { type: String, default: null },
     cardHolderName: { type: String, default: null },
     cardExpiry: { type: String, default: null },
+    sellerEarningsCredited: { type: Boolean, default: false },
     expectedDeliveryDays: {
       type: Number,
       min: 1,

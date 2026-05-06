@@ -10,6 +10,14 @@ function formatAddress(address) {
   return [address.line1, address.city, address.country, address.postalCode].filter(Boolean).join(", ") || "No delivery address provided";
 }
 
+function isOrderRevenueCredited(order) {
+  if (Object.prototype.hasOwnProperty.call(order, "sellerEarningsCredited")) {
+    return Boolean(order.sellerEarningsCredited);
+  }
+
+  return order.paymentStatus === "Paid";
+}
+
 export default function DashboardPage({ isActive = true }) {
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -53,8 +61,8 @@ export default function DashboardPage({ isActive = true }) {
     return () => clearInterval(refreshTimer);
   }, [isActive, loadDashboard]);
 
-  // Revenue only counts orders that have been paid (Credit Card on place, COD on delivery)
-  const revenue = orders.reduce((sum, o) => sum + (o.paymentStatus === "Paid" ? Number(o.totalPrice || 0) : 0), 0);
+  // Revenue follows credited seller earnings: card orders count once processed, COD orders count on delivery.
+  const revenue = orders.reduce((sum, o) => sum + (isOrderRevenueCredited(o) ? Number(o.totalPrice || 0) : 0), 0);
   const reviewCount = Number(ratingSummary.reviewCount || 0);
   const sellerRating = reviewCount ? Number(ratingSummary.rating || 0) : null;
   const productsSold = orders
@@ -78,7 +86,7 @@ export default function DashboardPage({ isActive = true }) {
         <div className="metric-card">
           <div className="metric-label">Total Revenue</div>
           <div className="metric-value">${revenue.toFixed(2)}</div>
-          <div className="metric-subtitle">Paid orders only</div>
+          <div className="metric-subtitle">Credited earnings only</div>
         </div>
         <div className="metric-card">
           <div className="metric-label">Account Balance</div>
