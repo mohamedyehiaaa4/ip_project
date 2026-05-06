@@ -205,6 +205,26 @@ function AuthScreen({ onAuthed }) {
           </button>
         </p>
       </section>
+
+      <aside className="auth-cover auth-cover--secondary" aria-label="Buyer deals and support preview">
+        <div className="auth-cover__deal-panel">
+          <div className="auth-cover__deal-card auth-cover__deal-card--large">
+            <span>🔥</span>
+            <strong>Fresh deals</strong>
+            <small>Discounted picks updated daily</small>
+          </div>
+          <div className="auth-cover__deal-row">
+            <div className="auth-cover__deal-card">🎧</div>
+            <div className="auth-cover__deal-card">👟</div>
+            <div className="auth-cover__deal-card">⌚</div>
+          </div>
+        </div>
+        <div className="auth-cover__content auth-cover__content--compact">
+          <span className="auth-cover__eyebrow">Smart shopping</span>
+          <h2>Deals, wishlists, and support in one place.</h2>
+          <p>Keep favorite products close and resolve reports from your buyer dashboard.</p>
+        </div>
+      </aside>
     </main>
   );
 }

@@ -127,6 +127,26 @@ export default function AuthPage({ onAuthSuccess }) {
           {isRegister ? "Have an account? Login" : "No account? Register"}
         </button>
       </form>
+
+      <aside className="seller-auth-cover seller-auth-cover--secondary" aria-label="Seller insights preview">
+        <div className="seller-auth-cover__insights">
+          <div className="seller-auth-cover__insight-card seller-auth-cover__insight-card--hero">
+            <span>💰</span>
+            <strong>Credited earnings</strong>
+            <small>Balance updates as orders progress</small>
+          </div>
+          <div className="seller-auth-cover__mini-grid">
+            <div>⭐<strong>Ratings</strong></div>
+            <div>📍<strong>Addresses</strong></div>
+            <div>✅<strong>Reports</strong></div>
+          </div>
+        </div>
+        <div className="seller-auth-cover__content seller-auth-cover__content--compact">
+          <span>Business insights</span>
+          <h1>See payouts, ratings, and delivery info clearly.</h1>
+          <p>Use your seller portal to make faster decisions after every new order.</p>
+        </div>
+      </aside>
     </main>
   );
 }

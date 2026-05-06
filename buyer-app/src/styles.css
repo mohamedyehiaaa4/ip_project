@@ -1963,3 +1963,91 @@ body {
     max-width: 100%;
   }
 }
+
+/* Three-panel buyer auth layout */
+.auth-wrapper {
+  grid-template-columns: minmax(240px, 420px) minmax(320px, 440px) minmax(240px, 420px);
+  align-items: center;
+  gap: clamp(14px, 2vw, 24px);
+}
+.auth-cover {
+  min-height: min(640px, calc(100vh - 72px));
+}
+.auth-cover--secondary {
+  background:
+    linear-gradient(145deg, rgba(8, 145, 178, 0.14), rgba(16, 185, 129, 0.2)),
+    linear-gradient(135deg, #064e3b 0%, #0891b2 48%, #22c55e 100%);
+  box-shadow: 0 28px 80px rgba(8, 145, 178, 0.26);
+}
+.auth-cover--secondary::before {
+  background: rgba(45, 212, 191, 0.22);
+}
+.auth-cover--secondary::after {
+  background: rgba(187, 247, 208, 0.22);
+}
+.auth-cover__deal-panel {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  min-height: clamp(245px, 40vh, 350px);
+  padding: clamp(16px, 2vw, 24px);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(255,255,255,0.38), transparent 28%),
+    linear-gradient(145deg, rgba(255,255,255,0.24), rgba(255,255,255,0.08));
+  border: 1px solid rgba(255,255,255,0.24);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 24px 50px rgba(6, 78, 59, 0.22);
+  backdrop-filter: blur(10px);
+}
+.auth-cover__deal-card {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  border-radius: 22px;
+  background: rgba(255,255,255,0.88);
+  color: #064e3b;
+  font-size: 2rem;
+  box-shadow: 0 18px 34px rgba(6, 78, 59, 0.2);
+}
+.auth-cover__deal-card--large {
+  align-content: center;
+  gap: 7px;
+  min-height: 170px;
+  padding: 18px;
+  text-align: center;
+}
+.auth-cover__deal-card--large span { font-size: 2.4rem; }
+.auth-cover__deal-card--large strong { font-size: 1.15rem; }
+.auth-cover__deal-card--large small { color: #047857; font-size: 0.82rem; }
+.auth-cover__deal-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.auth-cover__content--compact h2 {
+  font-size: clamp(1.65rem, 3vw, 2.45rem);
+}
+@media (max-width: 1180px) {
+  .auth-wrapper {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 440px);
+  }
+  .auth-cover--secondary {
+    grid-column: 1 / -1;
+    min-height: auto;
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1fr);
+    gap: 20px;
+    align-items: center;
+  }
+  .auth-cover--secondary .auth-cover__deal-panel {
+    min-height: 220px;
+  }
+}
+@media (max-width: 900px) {
+  .auth-wrapper {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .auth-cover--secondary {
+    grid-template-columns: 1fr;
+  }
+}
