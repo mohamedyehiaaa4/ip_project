@@ -4,8 +4,23 @@ import { api, getUser, logout, saveAuth } from "./api";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 const API_ORIGIN = API_URL.replace(/\/api\/?$/, "");
+const DEFAULT_PRODUCT_IMAGE = `data:image/svg+xml;utf8,${encodeURIComponent(`
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#dbeafe"/>
+      <stop offset="55%" stop-color="#eff6ff"/>
+      <stop offset="100%" stop-color="#bfdbfe"/>
+    </linearGradient>
+  </defs>
+  <rect width="240" height="240" rx="36" fill="url(#bg)"/>
+  <circle cx="184" cy="56" r="22" fill="#93c5fd" opacity="0.7"/>
+  <path d="M56 178h128a16 16 0 0 0 16-16V90a16 16 0 0 0-16-16H56a16 16 0 0 0-16 16v72a16 16 0 0 0 16 16Z" fill="#ffffff" opacity="0.92"/>
+  <path d="M65 154l34-38 25 28 20-22 33 32H65Z" fill="#60a5fa"/>
+  <rect x="72" y="52" width="96" height="28" rx="14" fill="#2563eb" opacity="0.85"/>
+  <text x="120" y="215" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#1e3a8a">Product Image</text>
+</svg>`)}`;
 
-const STATUS_SEQUENCE = ["Placed", "Processing", "Preparing", "Shipping", "Delivered"];
 const LATE_DELIVERY_GRACE_DAYS = 3;
 
 function money(value) {
@@ -22,7 +37,7 @@ function stars(rating) {
 }
 
 function resolveImageUrl(path) {
-  if (!path) return "";
+  if (!path) return DEFAULT_PRODUCT_IMAGE;
   if (/^https?:\/\//i.test(path)) return path;
   if (String(path).startsWith("/uploads/")) return `${API_ORIGIN}${path}`;
   return String(path);
@@ -32,6 +47,11 @@ function formatDate(input) {
   const dt = new Date(input);
   if (Number.isNaN(dt.getTime())) return "Unknown";
   return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function formatAddress(address) {
+  if (!address) return "";
+  return [address.line1, address.city, address.country, address.postalCode].filter(Boolean).join(", ");
 }
 
 function addDays(input, days) {
@@ -65,37 +85,9 @@ function canFlagLateDelivery(order) {
 }
 
 function getDiscountedPrice(price, discountPercentage) {
-  const basePrice = Number(price || 0);
-  const discount = Number(discountPercentage || 0);
-  if (discount <= 0 || discount >= 100) return basePrice;
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
   return basePrice * (1 - discount / 100);
-}
-
-function getTrackingTimeline(order) {
-  const createdAt = order?.createdAt || new Date().toISOString();
-  const currentIndex = STATUS_SEQUENCE.indexOf(order?.status);
-  const expectedDate = resolveExpectedDeliveryDate(order);
-  const createdDate = new Date(createdAt);
-  const totalDays = Math.max(1, Number(order?.expectedDeliveryDays || 3));
-  const checkpoints = {
-    Placed: 0,
-    Processing: Math.max(1, Math.round(totalDays * 0.25)),
-    Preparing: Math.max(1, Math.round(totalDays * 0.5)),
-    Shipping: Math.max(1, Math.round(totalDays * 0.8)),
-    Delivered: totalDays
-  };
-
-  return STATUS_SEQUENCE.map((status, index) => {
-    const estimate = status === "Delivered"
-      ? expectedDate
-      : addDays(createdDate, checkpoints[status] || 0);
-    return {
-      status,
-      isActive: currentIndex >= index,
-      isCurrent: order?.status === status,
-      dateLabel: estimate ? formatDate(estimate) : "Unknown"
-    };
-  });
 }
 
 function AuthScreen({ onAuthed }) {
@@ -193,7 +185,7 @@ const ProductCard = memo(function ProductCard({ product, inWishlist, onAddToCart
       }
     }}>
       <div className="product-badge">{product.category || "General"}</div>
-      <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" />
+      <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
       <div className="product-title">{product.name}</div>
       <div className="product-rating">
         <span className="stars">{stars(product.ratings)}</span>
@@ -230,6 +222,7 @@ function BuyerAppShell() {
   const [cart, setCart] = useState({ items: [], subtotal: 0, itemCount: 0 });
   const [wishlist, setWishlist] = useState([]);
   const [profile, setProfile] = useState({ name: user?.name || "", email: user?.email || "", phone: "", addresses: [] });
+  const [selectedAddressId, setSelectedAddressId] = useState("");
   const [newAddress, setNewAddress] = useState({ label: "Home", line1: "", city: "", country: "", postalCode: "", isDefault: false });
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
@@ -245,7 +238,6 @@ function BuyerAppShell() {
   const [ratingForms, setRatingForms] = useState({});
   const [toasts, setToasts] = useState([]);
   const [visibleCount, setVisibleCount] = useState(12);
-  const [trackingOrderId, setTrackingOrderId] = useState("");
   const [productDetail, setProductDetail] = useState(null);
   const [productReview, setProductReview] = useState({ rating: 5, text: "" });
   const [aiSummary, setAiSummary] = useState({ text: "", loading: false, error: "" });
@@ -274,13 +266,18 @@ function BuyerAppShell() {
       setCart(cartData || { items: [], subtotal: 0, itemCount: 0 });
       setWishlist(Array.isArray(wishlistData) ? wishlistData : []);
       setMyFlags(Array.isArray(flagsData) ? flagsData : []);
+      const addresses = Array.isArray(profileData?.addresses) ? profileData.addresses : [];
       setProfile((prev) => ({
         ...prev,
         name: profileData?.name || prev.name,
         email: profileData?.email || prev.email,
         phone: profileData?.phone || "",
-        addresses: Array.isArray(profileData?.addresses) ? profileData.addresses : []
+        addresses
       }));
+      setSelectedAddressId((current) => {
+        if (addresses.some((address) => String(address._id) === String(current))) return current;
+        return String((addresses.find((address) => address.isDefault) || addresses[0])?._id || "");
+      });
     } catch (err) {
       pushToast(err.message || "Failed to load buyer data", "error");
     }
@@ -330,7 +327,6 @@ function BuyerAppShell() {
   }, [orders, orderFilter]);
 
   const selectedReportOrder = orders.find((order) => String(order._id) === String(reportForm.orderId));
-  const trackingOrder = orders.find((order) => String(order._id) === String(trackingOrderId)) || null;
 
   const reportSellerOptions = useMemo(() => {
     if (!selectedReportOrder) return [];
@@ -357,6 +353,10 @@ function BuyerAppShell() {
     return Array.from(map.values());
   }, [selectedReportOrder]);
 
+  const savedAddresses = Array.isArray(profile.addresses) ? profile.addresses : [];
+  const defaultAddress = savedAddresses.find((address) => address.isDefault) || savedAddresses[0] || null;
+  const selectedAddress = savedAddresses.find((address) => String(address._id) === String(selectedAddressId)) || defaultAddress;
+
   const applyOptimisticCartAdd = useCallback((product, quantity = 1) => {
     setCart((prev) => {
       const existingIndex = prev.items.findIndex((item) => String(item.productId) === String(product._id));
@@ -371,7 +371,9 @@ function BuyerAppShell() {
           lineTotal: Number(current.unitPrice || 0) * nextQty
         };
       } else {
-        const unitPrice = Number(product.price || 0);
+        const originalPrice = Number(product.price || 0);
+        const discountPercentage = Math.max(0, Math.min(100, Number(product.discountPercentage || 0)));
+        const unitPrice = getDiscountedPrice(originalPrice, discountPercentage);
         nextItems.push({
           productId: product._id,
           productName: product.name,
@@ -379,6 +381,8 @@ function BuyerAppShell() {
           imageUrl: product.imageUrl || "",
           sellerId: product.sellerId,
           unitPrice,
+          originalPrice,
+          discountPercentage,
           quantity,
           lineTotal: unitPrice * quantity,
           availableInventory: Number(product.inventory || 0)
@@ -432,14 +436,31 @@ function BuyerAppShell() {
 
   const onOrderNow = useCallback(async (product) => {
     try {
-      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod);
+      if (!savedAddresses.length) {
+        pushToast("Add at least one delivery address before placing an order", "info");
+        setScreen("profile");
+        return;
+      }
+
+      if (!selectedAddress) {
+        pushToast("Choose a delivery address for this order", "info");
+        return;
+      }
+
+      await api.placeOrder(
+        [{ productId: product._id, quantity: 1 }],
+        paymentMethod,
+        paymentMethod === "Credit Card" ? cardDetails : null,
+        selectedAddress._id || selectedAddressId,
+        selectedAddress
+      );
       await refreshAll();
       setScreen("orders");
       pushToast("Order placed", "success");
     } catch (err) {
       pushToast(err.message || "Failed to place order", "error");
     }
-  }, [paymentMethod, pushToast]);
+  }, [cardDetails, paymentMethod, pushToast, refreshAll, savedAddresses.length, selectedAddress, selectedAddressId]);
 
   const onOpenDetails = useCallback(async (product) => {
     setProductDetail({ product, comments: [], loading: true });
@@ -581,6 +602,15 @@ function BuyerAppShell() {
         pushToast("Your cart is empty", "info");
         return;
       }
+      if (!savedAddresses.length) {
+        pushToast("Add at least one delivery address before checkout", "info");
+        setScreen("profile");
+        return;
+      }
+      if (!selectedAddress) {
+        pushToast("Choose a delivery address for this order", "info");
+        return;
+      }
       if (paymentMethod === "Credit Card") {
         const { cardNumber, cardHolder, cardExpiry, cardCVV } = cardDetails;
         if (!cardNumber || !cardHolder || !cardExpiry || !cardCVV) {
@@ -588,7 +618,7 @@ function BuyerAppShell() {
           return;
         }
       }
-      const payload = { paymentMethod };
+      const payload = { paymentMethod, deliveryAddressId: selectedAddress._id || selectedAddressId, deliveryAddress: selectedAddress };
       if (paymentMethod === "Credit Card") payload.cardDetails = cardDetails;
       await api.checkoutCart(payload);
       await refreshAll();
@@ -663,7 +693,9 @@ function BuyerAppShell() {
   async function addAddress() {
     try {
       const addresses = await api.addAddress(newAddress);
-      setProfile((prev) => ({ ...prev, addresses: Array.isArray(addresses) ? addresses : prev.addresses }));
+      const nextAddresses = Array.isArray(addresses) ? addresses : profile.addresses;
+      setProfile((prev) => ({ ...prev, addresses: nextAddresses }));
+      setSelectedAddressId(String((nextAddresses.find((address) => address.isDefault) || nextAddresses.at(-1) || nextAddresses[0])?._id || ""));
       setNewAddress({ label: "Home", line1: "", city: "", country: "", postalCode: "", isDefault: false });
       pushToast("Address added", "success");
     } catch (err) {
@@ -674,10 +706,26 @@ function BuyerAppShell() {
   async function deleteAddress(addressId) {
     try {
       const addresses = await api.deleteAddress(addressId);
-      setProfile((prev) => ({ ...prev, addresses: Array.isArray(addresses) ? addresses : prev.addresses }));
+      const nextAddresses = Array.isArray(addresses) ? addresses : profile.addresses;
+      setProfile((prev) => ({ ...prev, addresses: nextAddresses }));
+      setSelectedAddressId((current) => {
+        if (nextAddresses.some((address) => String(address._id) === String(current))) return current;
+        return String((nextAddresses.find((address) => address.isDefault) || nextAddresses[0])?._id || "");
+      });
       pushToast("Address deleted", "info");
     } catch (err) {
       pushToast(err.message || "Failed to delete address", "error");
+    }
+  }
+
+
+  async function resolveFlag(flagId) {
+    try {
+      await api.deleteFlag(flagId);
+      setMyFlags((prev) => prev.filter((flag) => String(flag._id) !== String(flagId)));
+      pushToast("Report marked as resolved", "success");
+    } catch (err) {
+      pushToast(err.message || "Failed to resolve report", "error");
     }
   }
 
@@ -718,7 +766,7 @@ function BuyerAppShell() {
         ))}
       </div>
 
-      <div className={`screen ${screen === "home" ? "active" : ""}`} id="home">
+      <div className={`screen screen--home ${screen === "home" ? "active" : ""}`} id="home">
         {screen === "home" ? (
           <div>
             <div className="buyer-hero">
@@ -796,7 +844,7 @@ function BuyerAppShell() {
             ) : (
               <>
                 <div className="detail-grid">
-                  <img className="detail-image" src={resolveImageUrl(productDetail.product?.imageUrl)} alt={productDetail.product?.name || "Product"} />
+                  <img className="detail-image" src={resolveImageUrl(productDetail.product?.imageUrl)} alt={productDetail.product?.name || "Product"} onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                   <div>
                     <div className="product-badge">{productDetail.product?.category || "General"}</div>
                     <h2 className="detail-title">{productDetail.product?.name}</h2>
@@ -922,16 +970,25 @@ function BuyerAppShell() {
         </div>
       ) : null}
 
-      <div className={`screen ${screen === "cart" ? "active" : ""}`} id="cart">
+      <div className={`screen screen--contained ${screen === "cart" ? "active" : ""}`} id="cart">
         {screen === "cart" ? (
           <div>
             <h1 className="header">Cart</h1>
             {cart.items.length ? cart.items.map((item) => (
               <article key={String(item.productId)} className="order-card">
                 <h2 className="order-card__title">{item.productName}</h2>
-                <img className="mini-product-img" src={resolveImageUrl(item.imageUrl)} alt={item.productName} loading="lazy" decoding="async" />
+                <img className="mini-product-img" src={resolveImageUrl(item.imageUrl)} alt={item.productName} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                 <p style={{ color: "var(--text-muted)" }}>Seller: {item.sellerId}</p>
-                <p style={{ marginTop: 6, marginBottom: 10 }}>{money(item.unitPrice)} x {item.quantity} = <strong>{money(item.lineTotal)}</strong></p>
+                <p style={{ marginTop: 6, marginBottom: 10 }}>
+                  {Number(item.discountPercentage || 0) > 0 ? (
+                    <>
+                      <span className="product-price-original">{money(item.originalPrice ?? item.unitPrice)}</span>{" "}
+                      <strong>{money(item.unitPrice)}</strong>
+                      <span className="product-discount-badge" style={{ marginLeft: 8 }}>{Math.round(Number(item.discountPercentage || 0))}% OFF</span>
+                    </>
+                  ) : money(item.unitPrice)}
+                  {" x "}{item.quantity} = <strong>{money(item.lineTotal)}</strong>
+                </p>
                 <div className="quantity-row">
                   <button type="button" className="qty-btn" onClick={() => updateCartQuantity(item.productId, Math.max(0, item.quantity - 1))}>-</button>
                   <span>{item.quantity}</span>
@@ -943,6 +1000,42 @@ function BuyerAppShell() {
 
             <div className="product-details" style={{ marginTop: 16 }}>
               <h2 style={{ marginBottom: 10 }}>Payment and Checkout</h2>
+              <div className="checkout-section">
+                <div className="checkout-section__header">
+                  <div>
+                    <h3>Deliver to</h3>
+                    <p>Choose one of your saved locations for this order.</p>
+                  </div>
+                  <button type="button" className="btn btn-secondary" onClick={() => setScreen("profile")}>Manage addresses</button>
+                </div>
+                {savedAddresses.length ? (
+                  <div className="checkout-address-grid">
+                    {savedAddresses.map((address) => (
+                      <label key={address._id} className={`checkout-address-card ${String(selectedAddressId) === String(address._id) ? "selected" : ""}`}>
+                        <input
+                          type="radio"
+                          name="delivery-address"
+                          value={address._id}
+                          checked={String(selectedAddressId) === String(address._id)}
+                          onChange={() => setSelectedAddressId(String(address._id))}
+                        />
+                        <span>
+                          <strong>{address.label || "Address"}</strong>
+                          {address.isDefault ? <em>Default</em> : null}
+                          <small>{formatAddress(address)}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="checkout-empty-address">
+                    <strong>No saved delivery addresses yet.</strong>
+                    <p>Add at least one address in Profile before completing checkout.</p>
+                    <button type="button" className="btn order-btn" onClick={() => setScreen("profile")}>Add address</button>
+                  </div>
+                )}
+              </div>
+
               <select className="search-bar" value={paymentMethod} onChange={(e) => { setPaymentMethod(e.target.value); setCardDetails({ cardNumber: "", cardHolder: "", cardExpiry: "", cardCVV: "" }); }}>
                 <option>Cash on Delivery</option>
                 <option>Credit Card</option>
@@ -1004,7 +1097,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "orders" ? "active" : ""}`} id="orders">
+      <div className={`screen screen--contained ${screen === "orders" ? "active" : ""}`} id="orders">
         {screen === "orders" ? (
           <div>
             <h1 className="header">Orders</h1>
@@ -1022,6 +1115,7 @@ function BuyerAppShell() {
                       className="order-card__image" 
                       src={resolveImageUrl(order.itemsDetailed?.[0]?.imageUrl || "")} 
                       alt={order.productName || "Product"}
+                      onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }}
                     />
                   </div>
                   <div className="order-card__content">
@@ -1039,32 +1133,14 @@ function BuyerAppShell() {
                       <span className="order-card__price">{money(order.totalPrice)}</span>
                       <span className="order-card__delivery">📅 {formatDate(resolveExpectedDeliveryDate(order))}</span>
                     </div>
+                    {order.deliveryAddress ? (
+                      <div className="order-card__address">📍 {order.deliveryAddress.label || "Delivery"}: {formatAddress(order.deliveryAddress)}</div>
+                    ) : null}
                   </div>
                 </div>
 
-                <div className="order-card__tracking">
-                  <div className={`order-card__tracking-step ${["Placed", "Processing", "Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Placed</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${["Processing", "Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Processing</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${["Preparing", "Shipping", "Delivered"].includes(order.status) ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Preparing</div>
-                  </div>
-                  <div className={`order-card__tracking-step ${order.status === "Delivered" ? "active" : ""}`}>
-                    <div className="order-card__tracking-dot" />
-                    <div>Delivered</div>
-                  </div>
-                </div>
 
                 <div className="order-card__actions">
-                  <button type="button" className="order-card__action-btn order-card__action-btn--primary" onClick={() => { setTrackingOrderId(order._id); setScreen("tracking"); }}>
-                    Track
-                  </button>
                   <button type="button" className="order-card__action-btn order-card__action-btn--secondary" onClick={() => { setReportForm({ ...reportForm, orderId: order._id, sellerId: order.sellerId }); setScreen("report"); }}>
                     Report
                   </button>
@@ -1104,44 +1180,8 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "tracking" ? "active" : ""}`} id="tracking">
-        {screen === "tracking" ? (
-          <div>
-            <h1 className="header">Tracking</h1>
-            {!trackingOrder ? (
-              <div className="product-details">Select an order from Orders to view full tracking timeline.</div>
-            ) : (
-              <div className="product-details">
-                <h2 style={{ marginBottom: 6 }}>{trackingOrder.productName || `Order ${String(trackingOrder._id).slice(-6)}`}</h2>
-                <p style={{ color: "var(--text-muted)", marginBottom: 14 }}>Order #{String(trackingOrder._id).slice(-8)}</p>
 
-                <div className="timeline">
-                  {getTrackingTimeline(trackingOrder).map((point) => (
-                    <div key={point.status} className={`timeline-item ${point.isActive ? "active" : ""}`}>
-                      <div className="timeline-dot" />
-                      <div>
-                        <div className="timeline-title">{point.status}{point.isCurrent ? " (Current)" : ""}</div>
-                        <div className="timeline-date">Estimated: {point.dateLabel}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <p style={{ marginTop: 10, color: "var(--text-muted)" }}>
-                  Expected by: <strong>{formatDate(resolveExpectedDeliveryDate(trackingOrder))}</strong>
-                  {` (late flag allowed after +${LATE_DELIVERY_GRACE_DAYS} days)`}
-                </p>
-
-                {trackingOrder.status === "Cancelled" ? (
-                  <p style={{ marginTop: 12, color: "#b91c1c", fontWeight: 700 }}>This order has been cancelled.</p>
-                ) : null}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
-
-      <div className={`screen ${screen === "wishlist" ? "active" : ""}`} id="wishlist">
+      <div className={`screen screen--contained ${screen === "wishlist" ? "active" : ""}`} id="wishlist">
         {screen === "wishlist" ? (
           <div>
             <h1 className="header">Wishlist</h1>
@@ -1150,7 +1190,7 @@ function BuyerAppShell() {
                 {wishlist.map((product) => (
                   <article key={product._id} className="product-card">
                     <div className="product-badge">{product.category || "General"}</div>
-                    <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" />
+                    <img className="product-img" src={resolveImageUrl(product.imageUrl)} alt={product.name} loading="lazy" decoding="async" onError={(e) => { e.currentTarget.src = DEFAULT_PRODUCT_IMAGE; }} />
                     <div className="product-title">{product.name}</div>
                     <div className="product-price">{money(product.price)}</div>
                     <button type="button" className="btn order-btn" onClick={() => onAddToCart(product)}>Add to Cart</button>
@@ -1163,7 +1203,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "profile" ? "active" : ""}`} id="profile">
+      <div className={`screen screen--contained ${screen === "profile" ? "active" : ""}`} id="profile">
         {screen === "profile" ? (
           <div>
             <h1 className="header">Profile</h1>
@@ -1187,7 +1227,7 @@ function BuyerAppShell() {
             <div className="product-details" style={{ marginTop: 16 }}>
               <h2 style={{ marginBottom: 12 }}>Addresses</h2>
               {profile.addresses?.length ? profile.addresses.map((address) => (
-                <div key={address._id} className="address-card">
+                <div key={address._id} className={`address-card ${String(selectedAddressId) === String(address._id) ? "selected" : ""}`}>
                   <div>
                     <strong>{address.label || "Address"}</strong>
                     <p>{address.line1}, {address.city}, {address.country}</p>
@@ -1196,7 +1236,7 @@ function BuyerAppShell() {
                   </div>
                   <button type="button" className="btn" style={{ background: "#fee2e2", marginTop: 0, width: "auto" }} onClick={() => deleteAddress(address._id)}>Delete</button>
                 </div>
-              )) : <p style={{ color: "var(--text-muted)" }}>No addresses yet.</p>}
+              )) : <div className="empty-address-state">Add your first saved location so checkout can ask where to deliver each order.</div>}
 
               <div className="form-group" style={{ marginTop: 16 }}>
                 <label className="form-label">Add New Address</label>
@@ -1216,7 +1256,7 @@ function BuyerAppShell() {
         ) : null}
       </div>
 
-      <div className={`screen ${screen === "report" ? "active" : ""}`} id="report">
+      <div className={`screen screen--contained ${screen === "report" ? "active" : ""}`} id="report">
         {screen === "report" ? (
           <div>
             <h1 className="header">Reports</h1>
@@ -1358,6 +1398,26 @@ function BuyerAppShell() {
                         )}
                         <span>Submitted: {new Date(flag.createdAt).toLocaleDateString()}</span>
                       </div>
+                      {isFiled && flag.status === "Open" && (
+                        <div style={{ marginTop: 12 }}>
+                          <button
+                            type="button"
+                            onClick={() => resolveFlag(flag._id)}
+                            style={{
+                              padding: "8px 18px",
+                              borderRadius: 8,
+                              border: "none",
+                              background: "#dcfce7",
+                              color: "#15803d",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              fontSize: 13
+                            }}
+                          >
+                            ✅ Mark as Resolved
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 }) : (
@@ -1376,7 +1436,6 @@ function BuyerAppShell() {
         <a href="#" className={`nav__item ${screen === "home" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("home"); }}>Home</a>
         <a href="#" className={`nav__item ${screen === "cart" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("cart"); }}>Cart</a>
         <a href="#" className={`nav__item ${screen === "orders" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("orders"); }}>Orders</a>
-        <a href="#" className={`nav__item ${screen === "tracking" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("tracking"); }}>Tracking</a>
         <a href="#" className={`nav__item ${screen === "wishlist" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("wishlist"); }}>Wishlist</a>
         <a href="#" className={`nav__item ${screen === "profile" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("profile"); }}>Profile</a>
         <a href="#" className={`nav__item ${screen === "report" ? "active" : ""}`} onClick={(e) => { e.preventDefault(); setScreen("report"); }}>Report</a>
