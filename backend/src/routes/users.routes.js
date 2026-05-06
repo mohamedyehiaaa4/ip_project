@@ -18,6 +18,12 @@ function normalizePaymentMethod(value) {
   return PAYMENT_METHODS.includes(candidate) ? candidate : "Cash on Delivery";
 }
 
+function getDiscountedPrice(price, discountPercentage) {
+  const basePrice = Math.max(0, Number(price || 0));
+  const discount = Math.max(0, Math.min(100, Number(discountPercentage || 0)));
+  return basePrice * (1 - discount / 100);
+}
+
 function validateCardDetails(cardDetails) {
   if (!cardDetails) return "Card details are required for Credit Card payment";
   const { cardNumber, cardHolder, cardExpiry, cardCVV } = cardDetails;
@@ -43,6 +49,23 @@ function normalizeAddress(rawAddress = {}) {
   };
 }
 
+function snapshotAddress(address = {}) {
+  return {
+    label: String(address.label || "Delivery Address").trim() || "Delivery Address",
+    line1: String(address.line1 || address.addressLine || "").trim(),
+    city: String(address.city || "").trim(),
+    country: String(address.country || "").trim(),
+    postalCode: String(address.postalCode || "").trim()
+  };
+}
+
+function hasAddressDetails(address = {}) {
+  return Boolean(
+    address &&
+    [address.line1, address.addressLine, address.city, address.country, address.postalCode].some((value) => String(value || "").trim())
+  );
+}
+
 async function buildBuyerCartPayload(userId) {
   const user = await User.findById(userId).select("cart").lean();
   const cart = Array.isArray(user?.cart) ? user.cart : [];
@@ -56,7 +79,9 @@ async function buildBuyerCartPayload(userId) {
       if (!product) return null;
 
       const quantity = Math.max(1, Number(item.quantity || 1));
-      const unitPrice = Number(product.price || 0);
+      const originalPrice = Number(product.price || 0);
+      const discountPercentage = Math.max(0, Math.min(100, Number(product.discountPercentage || 0)));
+      const unitPrice = getDiscountedPrice(originalPrice, discountPercentage);
       const lineTotal = unitPrice * quantity;
 
       return {
@@ -66,6 +91,8 @@ async function buildBuyerCartPayload(userId) {
         imageUrl: product.imageUrl || "",
         sellerId: product.sellerId,
         unitPrice,
+        originalPrice,
+        discountPercentage,
         quantity,
         lineTotal,
         availableInventory: Number(product.inventory || 0),
@@ -84,7 +111,7 @@ async function buildBuyerCartPayload(userId) {
 
 router.get("/seller/me/profile", auth("seller"), async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance");
+    const user = await User.findById(req.user.id).select("name businessName email supportEmail phone addressLine city country balance sellerRating sellerReviewCount");
     if (!user) return res.status(404).json({ message: "Seller not found" });
     return res.json(user);
   } catch (err) {
@@ -220,6 +247,9 @@ router.delete("/buyer/me/addresses/:addressId", auth("buyer"), async (req, res) 
 
     const existing = user.addresses.id(req.params.addressId);
     if (!existing) return res.status(404).json({ message: "Address not found" });
+    if (user.addresses.length <= 1) {
+      return res.status(400).json({ message: "At least one delivery address is required" });
+    }
 
     const wasDefault = Boolean(existing.isDefault);
     existing.deleteOne();
@@ -368,16 +398,41 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
   try {
     const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
     const cardDetails = req.body?.cardDetails || null;
+    const deliveryAddressId = req.body?.deliveryAddressId;
+    const requestDeliveryAddress = req.body?.deliveryAddress;
 
     if (paymentMethod === "Credit Card") {
       const cardError = validateCardDetails(cardDetails);
       if (cardError) return res.status(400).json({ message: cardError });
     }
 
-    const user = await User.findById(req.user.id).select("cart");
+    const user = await User.findById(req.user.id).select("cart addresses");
     if (!user) return res.status(404).json({ message: "Buyer not found" });
     if (!Array.isArray(user.cart) || !user.cart.length) {
       return res.status(400).json({ message: "Cart is empty" });
+    }
+
+    const addresses = Array.isArray(user.addresses) ? user.addresses : [];
+    if (!addresses.length && !hasAddressDetails(requestDeliveryAddress)) {
+      return res.status(400).json({ message: "Please add at least one delivery address before checkout" });
+    }
+
+    const defaultAddress = addresses.find((address) => address.isDefault) || addresses[0];
+    const selectedAddress = deliveryAddressId
+      ? addresses.find((address) => String(address._id) === String(deliveryAddressId))
+      : defaultAddress;
+
+    const addressToSnapshot = hasAddressDetails(requestDeliveryAddress)
+      ? requestDeliveryAddress
+      : selectedAddress || defaultAddress || null;
+
+    if (!addressToSnapshot) {
+      return res.status(400).json({ message: "Please select a valid delivery address" });
+    }
+
+    const deliveryAddress = snapshotAddress(addressToSnapshot);
+    if (!hasAddressDetails(deliveryAddress)) {
+      return res.status(400).json({ message: "Please provide a complete delivery address" });
     }
 
     const cartPayload = await buildBuyerCartPayload(req.user.id);
@@ -415,7 +470,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
             isActive: true,
             inventory: { $gte: item.quantity }
           },
-          { $inc: { inventory: -item.quantity, orders: item.quantity } }
+          { $inc: { inventory: -item.quantity } }
         );
 
         if (!stockResult.modifiedCount) {
@@ -424,7 +479,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
               stockUpdates.map((u) => ({
                 updateOne: {
                   filter: { _id: u.productId },
-                  update: { $inc: { inventory: u.quantity, orders: -u.quantity } }
+                  update: { $inc: { inventory: u.quantity } }
                 }
               }))
             );
@@ -447,7 +502,8 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
         paymentMethod,
         paymentStatus: isCreditCard ? "Paid" : "Pending",
         expectedDeliveryDays,
-        expectedDeliveryDate: addDays(new Date(), expectedDeliveryDays)
+        expectedDeliveryDate: addDays(new Date(), expectedDeliveryDays),
+        deliveryAddress
       };
 
       if (isCreditCard) {
