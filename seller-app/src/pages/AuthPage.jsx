@@ -35,6 +35,34 @@ export default function AuthPage({ onAuthSuccess }) {
 
   return (
     <main className="auth-shell">
+      <aside className="seller-auth-cover" aria-label="Seller operations preview">
+        <div className="seller-auth-cover__visual">
+          <div className="seller-auth-cover__glow" />
+          <div className="seller-auth-cover__shelf seller-auth-cover__shelf--top" />
+          <div className="seller-auth-cover__shelf seller-auth-cover__shelf--middle" />
+          <div className="seller-auth-cover__package seller-auth-cover__package--one">📦</div>
+          <div className="seller-auth-cover__package seller-auth-cover__package--two">🏷️</div>
+          <div className="seller-auth-cover__chart">
+            <span />
+            <span />
+            <span />
+          </div>
+          <div className="seller-auth-cover__order-card">
+            <strong>New order</strong>
+            <span>Ready to process</span>
+          </div>
+        </div>
+        <div className="seller-auth-cover__content">
+          <span>Seller workspace</span>
+          <h1>Manage products, orders, and delivery details faster.</h1>
+          <p>Sign in to update inventory, process paid orders, and keep buyers informed.</p>
+          <div className="seller-auth-cover__metrics" aria-label="Seller portal highlights">
+            <span><strong>24/7</strong> order access</span>
+            <span><strong>Live</strong> inventory tools</span>
+          </div>
+        </div>
+      </aside>
+
       <form className="auth-card-dark" onSubmit={submit}>
         <div className="auth-brand">
           <div className="logo-badge">📦</div>
@@ -90,6 +118,10 @@ export default function AuthPage({ onAuthSuccess }) {
         </div>
 
         {error ? <div className="alert error">{error}</div> : null}
+        <div className="seller-auth-perks" aria-label="Seller account benefits">
+          <span>📈 Sales dashboard</span>
+          <span>🚚 Delivery addresses</span>
+        </div>
         <button type="submit" className="btn-save">{isRegister ? "Create account" : "Login"}</button>
         <button type="button" className="btn-cancel" onClick={() => setIsRegister((v) => !v)}>
           {isRegister ? "Have an account? Login" : "No account? Register"}

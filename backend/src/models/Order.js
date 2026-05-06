@@ -1,5 +1,16 @@
 const mongoose = require("mongoose");
 
+const deliveryAddressSchema = new mongoose.Schema(
+  {
+    label: { type: String, default: "Delivery Address", trim: true },
+    line1: { type: String, default: "", trim: true },
+    city: { type: String, default: "", trim: true },
+    country: { type: String, default: "", trim: true },
+    postalCode: { type: String, default: "", trim: true }
+  },
+  { _id: false }
+);
+
 const orderItemSchema = new mongoose.Schema(
   {
     productId: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
@@ -33,6 +44,7 @@ const orderSchema = new mongoose.Schema(
     cardLast4: { type: String, default: null },
     cardHolderName: { type: String, default: null },
     cardExpiry: { type: String, default: null },
+    sellerEarningsCredited: { type: Boolean, default: false },
     expectedDeliveryDays: {
       type: Number,
       min: 1,
@@ -40,6 +52,10 @@ const orderSchema = new mongoose.Schema(
     },
     expectedDeliveryDate: {
       type: Date,
+      default: null
+    },
+    deliveryAddress: {
+      type: deliveryAddressSchema,
       default: null
     }
   },
