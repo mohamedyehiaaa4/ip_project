@@ -10,7 +10,6 @@ const productSchema = new mongoose.Schema(
     deliveryDays: { type: Number, default: 3, min: 1 },
     ratings: { type: Number, default: 0 },
     reviewCount: { type: Number, default: 0 },
-    orders: { type: Number, default: 0, min: 0 },
     discountPercentage: { type: Number, default: 0, min: 0, max: 100 },
     inventory: { type: Number, default: 0, min: 0 },
     imageUrl: { type: String, default: "" },
