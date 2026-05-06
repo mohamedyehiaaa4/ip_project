@@ -53,8 +53,8 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   products: (q = "", category = "") => request(`/products?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}`),
   productDetails: (id) => request(`/products/${id}`),
-  placeOrder: (items, paymentMethod = "Cash on Delivery", cardDetails = null) =>
-    request("/orders", { method: "POST", body: JSON.stringify({ items, paymentMethod, cardDetails }) }),
+  placeOrder: (items, paymentMethod = "Cash on Delivery", cardDetails = null, deliveryAddressId = "", deliveryAddress = null) =>
+    request("/orders", { method: "POST", body: JSON.stringify({ items, paymentMethod, cardDetails, deliveryAddressId, deliveryAddress }) }),
   buyerOrders: () => request("/orders/buyer/me"),
   cancelOrder: (orderId) => request(`/orders/buyer/${orderId}/cancel`, { method: "PATCH" }),
   removeOrder: (orderId) => request(`/orders/buyer/${orderId}`, { method: "DELETE" }),
@@ -63,6 +63,7 @@ export const api = {
   summary: (productId) => request(`/comments/product/${productId}/summarize`),
   flagUser: (payload) => request("/flags", { method: "POST", body: JSON.stringify(payload) }),
   myFlags: () => request("/flags/buyer/my-flags"),
+  deleteFlag: (id) => request(`/flags/${id}`, { method: "DELETE" }),
   buyerProfile: () => request("/users/buyer/me/profile"),
   updateBuyerProfile: (payload) => request("/users/buyer/me/profile", { method: "PATCH", body: JSON.stringify(payload) }),
   addAddress: (payload) => request("/users/buyer/me/addresses", { method: "POST", body: JSON.stringify(payload) }),

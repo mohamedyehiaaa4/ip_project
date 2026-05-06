@@ -35,6 +35,25 @@ export default function AuthPage({ onAuthSuccess }) {
 
   return (
     <main className="auth-shell">
+      <aside className="seller-auth-cover" aria-label="Seller operations preview">
+        <div className="seller-auth-cover__visual">
+          <div className="seller-auth-cover__shelf seller-auth-cover__shelf--top" />
+          <div className="seller-auth-cover__shelf seller-auth-cover__shelf--middle" />
+          <div className="seller-auth-cover__package seller-auth-cover__package--one">📦</div>
+          <div className="seller-auth-cover__package seller-auth-cover__package--two">🏷️</div>
+          <div className="seller-auth-cover__chart">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
+        <div className="seller-auth-cover__content">
+          <span>Seller workspace</span>
+          <h1>Manage products, orders, and delivery details faster.</h1>
+          <p>Sign in to update inventory, process paid orders, and keep buyers informed.</p>
+        </div>
+      </aside>
+
       <form className="auth-card-dark" onSubmit={submit}>
         <div className="auth-brand">
           <div className="logo-badge">📦</div>
