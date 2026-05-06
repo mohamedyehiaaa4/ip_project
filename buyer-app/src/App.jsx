@@ -446,14 +446,14 @@ function BuyerAppShell() {
         return;
       }
 
-      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod, paymentMethod === "Credit Card" ? cardDetails : null, selectedAddressId);
+      await api.placeOrder([{ productId: product._id, quantity: 1 }], paymentMethod, paymentMethod === "Credit Card" ? cardDetails : null, selectedAddressId, selectedAddress);
       await refreshAll();
       setScreen("orders");
       pushToast("Order placed", "success");
     } catch (err) {
       pushToast(err.message || "Failed to place order", "error");
     }
-  }, [cardDetails, paymentMethod, pushToast, refreshAll, savedAddresses.length, selectedAddressId]);
+  }, [cardDetails, paymentMethod, pushToast, refreshAll, savedAddresses.length, selectedAddress, selectedAddressId]);
 
   const onOpenDetails = useCallback(async (product) => {
     setProductDetail({ product, comments: [], loading: true });
@@ -611,7 +611,7 @@ function BuyerAppShell() {
           return;
         }
       }
-      const payload = { paymentMethod, deliveryAddressId: selectedAddressId };
+      const payload = { paymentMethod, deliveryAddressId: selectedAddressId, deliveryAddress: selectedAddress };
       if (paymentMethod === "Credit Card") payload.cardDetails = cardDetails;
       await api.checkoutCart(payload);
       await refreshAll();

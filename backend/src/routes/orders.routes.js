@@ -150,7 +150,7 @@ async function recomputeSellerDeliveredProductSales(sellerId) {
 
 router.post("/", auth("buyer"), async (req, res) => {
   try {
-    const { items, paymentMethod, cardDetails, deliveryAddressId } = req.body || {};
+    const { items, paymentMethod, cardDetails, deliveryAddressId, deliveryAddress: requestDeliveryAddress } = req.body || {};
     if (!Array.isArray(items) || !items.length) {
       return res.status(400).json({ message: "items[] is required" });
     }
@@ -165,7 +165,7 @@ router.post("/", auth("buyer"), async (req, res) => {
     if (!buyer) return res.status(404).json({ message: "Buyer not found" });
 
     const addresses = Array.isArray(buyer.addresses) ? buyer.addresses : [];
-    if (!addresses.length) {
+    if (!addresses.length && !hasAddressDetails(requestDeliveryAddress)) {
       return res.status(400).json({ message: "Please add at least one delivery address before placing an order" });
     }
 
@@ -173,11 +173,16 @@ router.post("/", auth("buyer"), async (req, res) => {
       ? addresses.find((address) => String(address._id) === String(deliveryAddressId))
       : addresses.find((address) => address.isDefault) || addresses[0];
 
-    if (!selectedAddress) {
+    const addressToSnapshot = selectedAddress || (hasAddressDetails(requestDeliveryAddress) ? requestDeliveryAddress : null);
+
+    if (!addressToSnapshot) {
       return res.status(400).json({ message: "Please select a valid delivery address" });
     }
 
-    const deliveryAddress = snapshotAddress(selectedAddress);
+    const deliveryAddress = snapshotAddress(addressToSnapshot);
+    if (!hasAddressDetails(deliveryAddress)) {
+      return res.status(400).json({ message: "Please provide a complete delivery address" });
+    }
 
     const products = await Product.find({ _id: { $in: items.map((i) => i.productId) }, isActive: true });
     if (!products.length) return res.status(400).json({ message: "No valid products found" });

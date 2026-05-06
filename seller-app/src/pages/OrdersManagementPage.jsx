@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 
+function hasAddressDetails(address) {
+  return Boolean(address && [address.line1, address.addressLine, address.city, address.country, address.postalCode].some((value) => String(value || "").trim()));
+}
+
 function formatAddress(address) {
   if (!address) return "No delivery address provided";
   return [address.line1, address.city, address.country, address.postalCode].filter(Boolean).join(", ") || "No delivery address provided";
@@ -108,7 +112,7 @@ export default function OrdersManagementPage() {
               <h3>Order #{String(order._id).slice(-6)}</h3>
               <div className="order-meta">Buyer: {order.buyerName || "Unknown"}</div>
               <div className="order-meta">Product: {order.product || "Unknown"}</div>
-              <div className="order-address">
+              <div className={`order-address ${hasAddressDetails(order.deliveryAddress) ? "" : "order-address--missing"}`}>
                 <span className="order-address__icon" aria-hidden="true">📍</span>
                 <span className="order-address__content">
                   <strong>Delivery Address</strong>

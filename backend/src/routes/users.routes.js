@@ -52,11 +52,18 @@ function normalizeAddress(rawAddress = {}) {
 function snapshotAddress(address = {}) {
   return {
     label: String(address.label || "Delivery Address").trim() || "Delivery Address",
-    line1: String(address.line1 || "").trim(),
+    line1: String(address.line1 || address.addressLine || "").trim(),
     city: String(address.city || "").trim(),
     country: String(address.country || "").trim(),
     postalCode: String(address.postalCode || "").trim()
   };
+}
+
+function hasAddressDetails(address = {}) {
+  return Boolean(
+    address &&
+    [address.line1, address.addressLine, address.city, address.country, address.postalCode].some((value) => String(value || "").trim())
+  );
 }
 
 async function buildBuyerCartPayload(userId) {
@@ -392,6 +399,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
     const paymentMethod = normalizePaymentMethod(req.body?.paymentMethod);
     const cardDetails = req.body?.cardDetails || null;
     const deliveryAddressId = req.body?.deliveryAddressId;
+    const requestDeliveryAddress = req.body?.deliveryAddress;
 
     if (paymentMethod === "Credit Card") {
       const cardError = validateCardDetails(cardDetails);
@@ -405,7 +413,7 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
     }
 
     const addresses = Array.isArray(user.addresses) ? user.addresses : [];
-    if (!addresses.length) {
+    if (!addresses.length && !hasAddressDetails(requestDeliveryAddress)) {
       return res.status(400).json({ message: "Please add at least one delivery address before checkout" });
     }
 
@@ -413,11 +421,16 @@ router.post("/buyer/me/cart/checkout", auth("buyer"), async (req, res) => {
       ? addresses.find((address) => String(address._id) === String(deliveryAddressId))
       : addresses.find((address) => address.isDefault) || addresses[0];
 
-    if (!selectedAddress) {
+    const addressToSnapshot = selectedAddress || (hasAddressDetails(requestDeliveryAddress) ? requestDeliveryAddress : null);
+
+    if (!addressToSnapshot) {
       return res.status(400).json({ message: "Please select a valid delivery address" });
     }
 
-    const deliveryAddress = snapshotAddress(selectedAddress);
+    const deliveryAddress = snapshotAddress(addressToSnapshot);
+    if (!hasAddressDetails(deliveryAddress)) {
+      return res.status(400).json({ message: "Please provide a complete delivery address" });
+    }
 
     const cartPayload = await buildBuyerCartPayload(req.user.id);
     if (!cartPayload.items.length) {

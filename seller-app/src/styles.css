@@ -1067,3 +1067,17 @@
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
+
+.order-address--missing {
+  border-color: rgba(251, 191, 36, 0.34);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.12), rgba(245, 158, 11, 0.08));
+}
+
+.order-address--missing .order-address__icon {
+  background: rgba(251, 191, 36, 0.14);
+}
+
+.order-address--missing strong {
+  color: #fbbf24;
+}

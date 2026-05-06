@@ -53,8 +53,8 @@ export const api = {
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   products: (q = "", category = "") => request(`/products?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}`),
   productDetails: (id) => request(`/products/${id}`),
-  placeOrder: (items, paymentMethod = "Cash on Delivery", cardDetails = null, deliveryAddressId = "") =>
-    request("/orders", { method: "POST", body: JSON.stringify({ items, paymentMethod, cardDetails, deliveryAddressId }) }),
+  placeOrder: (items, paymentMethod = "Cash on Delivery", cardDetails = null, deliveryAddressId = "", deliveryAddress = null) =>
+    request("/orders", { method: "POST", body: JSON.stringify({ items, paymentMethod, cardDetails, deliveryAddressId, deliveryAddress }) }),
   buyerOrders: () => request("/orders/buyer/me"),
   cancelOrder: (orderId) => request(`/orders/buyer/${orderId}/cancel`, { method: "PATCH" }),
   removeOrder: (orderId) => request(`/orders/buyer/${orderId}`, { method: "DELETE" }),
