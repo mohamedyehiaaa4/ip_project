@@ -19,38 +19,22 @@ function isOrderRevenueCredited(order) {
 }
 
 export default function DashboardPage({ isActive = true }) {
-  const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
   const [balance, setBalance] = useState(0);
   const [ratingSummary, setRatingSummary] = useState({ rating: 0, reviewCount: 0 });
 
-  const loadSellerRating = useCallback(() => {
-    api.sellerRating()
-      .then((ratingData) => {
-        setRatingSummary({
-          rating: Number(ratingData?.rating || 0),
-          reviewCount: Number(ratingData?.reviewCount || 0)
-        });
-      })
-      .catch((err) => {
-        console.warn("Failed to load seller rating", err);
-      });
-  }, []);
-
   const loadDashboard = useCallback(() => {
-    Promise.all([api.myProducts(), api.myOrders(), api.myProfile()])
-      .then(([p, o, profile]) => {
-        setProducts(p);
+    Promise.all([api.myOrders(), api.myProfile()])
+      .then(([o, profile]) => {
         setOrders(o);
         setBalance(Number(profile.balance || 0));
         setRatingSummary({
           rating: Number(profile.sellerRating || 0),
           reviewCount: Number(profile.sellerReviewCount || 0)
         });
-        loadSellerRating();
       })
       .catch(console.error);
-  }, [loadSellerRating]);
+  }, []);
 
   useEffect(() => {
     if (!isActive) return undefined;

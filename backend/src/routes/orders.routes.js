@@ -137,31 +137,7 @@ async function refreshSellerRatingSummary(sellerId) {
   return summary;
 }
 
-async function recomputeSellerDeliveredProductSales(sellerId) {
-  const [sellerProducts, deliveredOrders] = await Promise.all([
-    Product.find({ sellerId }).select("_id").lean(),
-    Order.find({ sellerId, status: "Delivered" }).select("products").lean()
-  ]);
 
-  const soldByProduct = new Map();
-  for (const order of deliveredOrders) {
-    for (const item of order.products || []) {
-      const key = String(item.productId);
-      soldByProduct.set(key, (soldByProduct.get(key) || 0) + Number(item.quantity || 0));
-    }
-  }
-
-  const updates = sellerProducts.map((product) => ({
-    updateOne: {
-      filter: { _id: product._id, sellerId },
-      update: { $set: { orders: soldByProduct.get(String(product._id)) || 0 } }
-    }
-  }));
-
-  if (updates.length) {
-    await Product.bulkWrite(updates);
-  }
-}
 
 router.post("/", auth("buyer"), async (req, res) => {
   try {
@@ -415,25 +391,7 @@ router.get("/seller/rating", auth("seller"), async (req, res) => {
   }
 });
 
-router.get("/seller/stats", auth("seller"), async (req, res) => {
-  try {
-    const deliveredOrders = await Order.find({ sellerId: req.user.id, status: "Delivered" })
-      .select("products")
-      .lean();
 
-    const productsSold = deliveredOrders.reduce(
-      (sum, order) => sum + (order.products || []).reduce(
-        (itemSum, item) => itemSum + Number(item.quantity || 0),
-        0
-      ),
-      0
-    );
-
-    return res.json({ productsSold });
-  } catch (err) {
-    return res.status(500).json({ message: "Failed to fetch seller stats", error: err.message });
-  }
-});
 
 router.get("/seller/me", auth("seller"), async (req, res) => {
   try {
@@ -530,9 +488,7 @@ router.patch("/:id/status", auth("seller"), async (req, res) => {
       await User.findByIdAndUpdate(order.sellerId, { $inc: { balance: Number(order.totalPrice || 0) } });
     }
 
-    if (status === "Delivered" || previousStatus === "Delivered") {
-      await recomputeSellerDeliveredProductSales(order.sellerId);
-    }
+
 
     return res.json(order);
   } catch (err) {

@@ -25,10 +25,10 @@ const productUploadsDir = path.join(uploadsRoot, "products");
 fs.mkdirSync(productUploadsDir, { recursive: true });
 app.use("/uploads", express.static(uploadsRoot));
 
-app.get("/api/health", (_req, res) => {
-  res.json({ ok: true, service: "marketplace-api" });
-});
 
+app.get("/", (_req, res) => {
+  res.send("Marketplace API is running. Go to /api/health");
+});
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/orders", orderRoutes);

@@ -44,7 +44,7 @@ function SellerShell({ onLoggedOut }) {
         <button className={`nav-tab ${tab === "reports" ? "active" : ""}`} onClick={() => setTab("reports")}>Flags / Reports</button>
       </div>
 
-      <div id="alertContainer" />
+
 
       <div className={`section ${tab === "dashboard" ? "active" : ""}`} id="dashboardSection">
         <div className="container">

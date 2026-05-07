@@ -59,7 +59,7 @@ async function request(path, options = {}) {
 export const api = {
   register: (payload) => request("/auth/register", { method: "POST", body: JSON.stringify(payload) }),
   login: (payload) => request("/auth/login", { method: "POST", body: JSON.stringify(payload) }),
-  categories: () => request("/products/categories"),
+
   myProducts: () => request("/products/seller/me/list"),
   addProduct: (payload) => request("/products", {
     method: "POST",
@@ -71,13 +71,12 @@ export const api = {
   }),
   deleteProduct: (id) => request(`/products/${id}`, { method: "DELETE" }),
   myOrders: () => request("/orders/seller/me"),
-  sellerRating: () => request("/orders/seller/rating"),
+
   updateOrderStatus: (id, status) => request(`/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
   rateBuyer: (payload) => request("/orders/seller/ratings/buyer", { method: "POST", body: JSON.stringify(payload) }),
   flagUser: (payload) => request("/flags", { method: "POST", body: JSON.stringify(payload) }),
   reports: () => request("/flags/seller/reports"),
-  updateReportStatus: (id, status, resolutionNote = "") =>
-    request(`/flags/${id}/status`, { method: "PATCH", body: JSON.stringify({ status, resolutionNote }) }),
+
   deleteFlag: (id) => request(`/flags/${id}`, { method: "DELETE" }),
   myProfile: () => request("/users/seller/me/profile"),
   updateProfile: (payload) => request("/users/seller/me/profile", { method: "PATCH", body: JSON.stringify(payload) })
